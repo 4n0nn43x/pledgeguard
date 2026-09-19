@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="300" height="80">
+  <defs>
+    <rect id="a" x="12" y="12" width="36" height="36" rx="10"/>
+    <rect id="b" x="24" y="24" width="36" height="36" rx="10"/>
+    <clipPath id="ca"><use href="#a"/></clipPath>
+  </defs>
+  <use href="#b" fill="#2A9D8F" clip-path="url(#ca)"/>
+  <use href="#a" fill="none" stroke="#FFFFFF" stroke-width="4"/>
+  <use href="#b" fill="none" stroke="#FFFFFF" stroke-width="4"/>
+  <text x="80" y="48" font-family="Montserrat, Manrope, Inter, Helvetica, Arial, sans-serif" font-size="32" font-weight="600" letter-spacing="-0.6" fill="#FFFFFF">Pledge<tspan fill="#2A9D8F">Guard</tspan></text>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- two lenders' ledgers as overlapping rounded squares; the intersection is the collision the registry sees -->
+  <defs>
+    <rect id="a" x="8" y="8" width="36" height="36" rx="10"/>
+    <rect id="b" x="20" y="20" width="36" height="36" rx="10"/>
+    <clipPath id="ca"><use href="#a"/></clipPath>
+  </defs>
+  <use href="#b" fill="#2A9D8F" clip-path="url(#ca)"/>
+  <use href="#a" fill="none" stroke="#0F2A4A" stroke-width="4"/>
+  <use href="#b" fill="none" stroke="#0F2A4A" stroke-width="4"/>
+</svg>

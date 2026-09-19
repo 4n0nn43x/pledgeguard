@@ -2,10 +2,6 @@
 # must be built with --enable-multi-package=no (see build.sh): the 3.5 multi-package
 # driver passes flags that 3.4 damlc rejects. They still need to be listed here.
 packages:
-  - vendor/splice-api-token-metadata-v1
-  - vendor/splice-api-token-holding-v1
-  - vendor/splice-api-token-allocation-v1
-  - vendor/splice-api-token-allocation-request-v1
   - pledgeguard
   - pledgeguard-test
   - vendor/governance-action-v1

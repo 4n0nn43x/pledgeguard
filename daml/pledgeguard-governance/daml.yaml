@@ -2,7 +2,7 @@
 # matches what the deployed GovernanceRules expects. Do not bump to 3.5 without
 # rebuilding governance-action-v1 the same way DecMan does.
 sdk-version: 3.4.11
-name: pledgeguard-governance-v0
+name: pledgeguard-governance-v1
 version: 0.1.0
 source: daml
 dependencies:
@@ -10,7 +10,7 @@ dependencies:
   - daml-stdlib
 data-dependencies:
   - ../vendor/governance-action-v1/.daml/dist/governance-action-v1-0.1.0.dar
-  - ../pledgeguard/.daml/dist/pledgeguard-0.1.0.dar
+  - ../pledgeguard/.daml/dist/pledgeguard-0.2.0.dar
 build-options:
   - --target=2.2
   - --ghc-option=-Wunused-binds

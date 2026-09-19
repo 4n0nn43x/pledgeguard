@@ -1,0 +1,69 @@
+-- Governed actions of the decentralized registry party. DecMan's GovernanceRules executes
+-- `executeImpl` with the registry's authority once the member threshold (2 of 3) is met.
+-- Everything else the registry does is delegated to `ops` (see PledgeGuard.Delegation).
+module PledgeGuard.Governance.Proposals where
+
+import Governance.Action
+import PledgeGuard.Delegation
+import PledgeGuard.Registry
+
+-- | Admit an automation party: the one governed action that makes routine settlement possible.
+template GrantDelegationProposal
+  with
+    governanceParty : Party
+    proposer : Party
+    ops : Party
+  where
+    signatory proposer
+    observer governanceParty
+
+    interface instance GovernableAction for GrantDelegationProposal where
+      view = GovernableActionView with
+        governanceParty
+        proposer
+        actionLabel = "GrantRegistryDelegation"
+        description = "Delegate index opening and draw settlement to " <> show ops
+      executeImpl = do
+        create RegistryDelegation with registry = governanceParty, ops
+        pure ()
+
+-- | Cut the automation off: settlements stop until a new delegation is voted.
+template RevokeDelegationProposal
+  with
+    governanceParty : Party
+    proposer : Party
+    delegationCid : ContractId RegistryDelegation
+    reason : Text
+  where
+    signatory proposer
+    observer governanceParty
+
+    interface instance GovernableAction for RevokeDelegationProposal where
+      view = GovernableActionView with
+        governanceParty
+        proposer
+        actionLabel = "RevokeRegistryDelegation"
+        description = "Revoke delegation " <> show delegationCid <> ": " <> reason
+      executeImpl = exercise delegationCid Delegation_Revoke
+
+-- | Force-release a disputed hash. Not delegated: a lender dispute needs the members.
+template ClaimForceReleaseProposal
+  with
+    governanceParty : Party
+    proposer : Party
+    indexCid : ContractId ClaimIndex
+    reason : Text
+  where
+    signatory proposer
+    observer governanceParty
+    ensure reason /= ""
+
+    interface instance GovernableAction for ClaimForceReleaseProposal where
+      view = GovernableActionView with
+        governanceParty
+        proposer
+        actionLabel = "ClaimForceRelease"
+        description = "Force-release collateral index " <> show indexCid <> ": " <> reason
+      executeImpl = do
+        exercise indexCid ClaimIndex_Release
+        pure ()

@@ -11,6 +11,7 @@ import Daml.Script
 import Splice.Api.Token.AllocationV1
 import Splice.Api.Token.HoldingV1 (InstrumentId(..))
 import Splice.Api.Token.MetadataV1 (emptyMetadata)
+import PledgeGuard.Delegation
 import PledgeGuard.Lending
 import PledgeGuard.Registry
 
@@ -66,6 +67,13 @@ template MockTransfer
 t0 : Time
 t0 = time (date 2026 Oct 1) 0 0 0
 
+-- | ops acts for itself and reads as the registry (CanReadAs on its ledger user).
+asOps : Party -> Party -> Commands a -> Script a
+asOps ops registry = submitMulti [ops] [registry]
+
+asOpsMustFail : Party -> Party -> Commands a -> Script ()
+asOpsMustFail ops registry = submitMultiMustFail [ops] [registry]
+
 hashX : Text
 hashX = "9f2c1e4b7a6d8c3f5e0b2a1d4c7e9f8b6a5d3c2e1f0a9b8c7d6e5f4a3b2c1d0e"
 
@@ -77,12 +85,20 @@ scenario = do
   lenderB <- allocateParty "LenderB"
   registry <- allocateParty "Registry"
   auditor <- allocateParty "Auditor"
+  ops <- allocateParty "RegistryOps"
   setTime t0
 
-  -- 1. Fingerprint registered, registry opens the per-hash index.
+  -- 0. The registry (a decentralized party on Canton) delegates routine work to `ops`.
+  -- On LocalNet this create runs through DecMan governance (GrantDelegationProposal).
+  -- ops submits with readAs registry (its ledger user has CanReadAs on the registry).
+  deleg <- submit registry do createCmd RegistryDelegation with registry, ops
+  let settle drawCid indexCid = asOps ops registry do
+        exerciseCmd deleg Delegation_Settle with drawCid, indexCid, auditor
+
+  -- 1. Fingerprint registered, ops opens the per-hash index on the registry's behalf.
   fp <- submit originator do
     createCmd CollateralFingerprint with originator, registry, schemaId = "receivables-pool-v1", hash = hashX
-  idx0 <- submit registry do exerciseCmd fp CollateralFingerprint_Index
+  idx0 <- asOps ops registry do exerciseCmd deleg Delegation_Index with fingerprintCid = fp
 
   -- 2. Two facilities on the same collateral, each strictly bilateral.
   let propose lender amount rate = do
@@ -99,7 +115,7 @@ scenario = do
     createCmd MockAllocation with executor = registry, sender = lenderA, receiver = originator, amount = 1_000_000.0
   reqA <- submit lenderA do
     exerciseCmd facA Facility_RequestDraw with allocationCid = toInterfaceContractId allocA
-  resA <- submit registry do exerciseCmd reqA DrawRequest_Settle with indexCid = idx0, auditor
+  resA <- settle reqA idx0
   claimA <- case resA of
     Settled c -> pure c
     Collided _ -> fail "first draw must settle"
@@ -121,7 +137,7 @@ scenario = do
     createCmd MockAllocation with executor = registry, sender = lenderB, receiver = originator, amount = 750_000.0
   reqB <- submit lenderB do
     exerciseCmd facB Facility_RequestDraw with allocationCid = toInterfaceContractId allocB
-  resB <- submit registry do exerciseCmd reqB DrawRequest_Settle with indexCid = idx1, auditor
+  resB <- settle reqB idx1
   case resB of
     Collided _ -> pure ()
     Settled _ -> fail "second draw on the same hash must collide"
@@ -141,17 +157,25 @@ scenario = do
   -- 5. The registry cannot settle against an index for another hash.
   fpY <- submit originator do
     createCmd CollateralFingerprint with originator, registry, schemaId = "receivables-pool-v1", hash = "other"
-  idxY <- submit registry do exerciseCmd fpY CollateralFingerprint_Index
+  idxY <- asOps ops registry do exerciseCmd deleg Delegation_Index with fingerprintCid = fpY
   reqB2 <- submit lenderB do
     exerciseCmd facB Facility_RequestDraw with allocationCid = toInterfaceContractId allocB
-  submitMustFail registry do exerciseCmd reqB2 DrawRequest_Settle with indexCid = idxY, auditor
+  asOpsMustFail ops registry do exerciseCmd deleg Delegation_Settle with drawCid = reqB2, indexCid = idxY, auditor
 
   -- 6. A repays and releases; B's retry now settles.
   idx2 <- submit lenderA do exerciseCmd claimA Claim_Release
-  resB2 <- submit registry do exerciseCmd reqB2 DrawRequest_Settle with indexCid = idx2, auditor
+  resB2 <- settle reqB2 idx2
   case resB2 of
     Settled _ -> pure ()
     Collided _ -> fail "draw after release must settle"
   transfersFinal <- query @MockTransfer originator
   length transfersFinal === 2
+
+  -- 7. The registry (through governance on LocalNet) revokes the delegation: ops is cut off.
+  submit registry do exerciseCmd deleg Delegation_Revoke
+  reqB3 <- submit lenderB do
+    exerciseCmd facB Facility_RequestDraw with allocationCid = toInterfaceContractId allocB
+  asOpsMustFail ops registry do exerciseCmd deleg Delegation_Settle with drawCid = reqB3, indexCid = idx2, auditor
+  -- ops never had the registry's authority of its own
+  asOpsMustFail ops registry do exerciseCmd reqB3 DrawRequest_Settle with indexCid = idx2, auditor
   pure ()

@@ -1,0 +1,35 @@
+-- The registry is an externally-signed decentralized party (2 of 3 owner keys), so every
+-- transaction it authorises directly needs a multi-signature round through DecMan. Routine
+-- work (opening an index, settling a draw) must not. The registry therefore delegates those
+-- two choices, once and through governance, to an automation party `ops`. Authority inside
+-- the delegated choices is {registry} (signatory) + {ops} (controller), and the Daml
+-- choices below still enforce every check. Revocation and force-release stay governed.
+module PledgeGuard.Delegation where
+
+import PledgeGuard.Lending
+import PledgeGuard.Registry
+
+template RegistryDelegation
+  with
+    registry : Party
+    ops : Party
+  where
+    signatory registry
+    observer ops
+
+    nonconsuming choice Delegation_Index : ContractId ClaimIndex
+      with fingerprintCid : ContractId CollateralFingerprint
+      controller ops
+      do exercise fingerprintCid CollateralFingerprint_Index
+
+    nonconsuming choice Delegation_Settle : SettleResult
+      with
+        drawCid : ContractId DrawRequest
+        indexCid : ContractId ClaimIndex
+        auditor : Party
+      controller ops
+      do exercise drawCid DrawRequest_Settle with indexCid, auditor
+
+    choice Delegation_Revoke : ()
+      controller registry
+      do pure ()

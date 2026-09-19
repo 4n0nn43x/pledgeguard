@@ -5,7 +5,9 @@ HackCanton Season #3, track RWA & Business Workflows. Answer to [CIP #245](https
 
 **The problem.** The same collateral (a receivables pool, a loan pack) gets pledged to several lenders and nobody can tell: Tricolor cost JPMorgan a $170M charge-off, First Brands double-financed receivables into a ~$10B bankruptcy. On a transparent chain the collision is visible but so is every lender's book. On Canton the books are private, so the collision is invisible too.
 
-**What PledgeGuard does.** A lender's stablecoin draw is released only after proving, in the same atomic transaction and without revealing its facility, that the collateral fingerprint is not already securing a live draw. The check is performed by a neutral **registry party** that sees hashes, not terms. The registry is a **Decentralized Party** (BitSafe Decentralization Manager): multi-hosted, threshold-governed, no single operator.
+**What PledgeGuard does.** A lender's stablecoin draw is released only after proving, in the same atomic transaction and without revealing its facility, that the collateral fingerprint is not already securing a live draw. The check is performed by a neutral **registry party** that sees hashes, not terms. The registry is a **Decentralized Party** created with BitSafe's [Decentralization Manager](https://github.com/DLC-link/decentralization-manager): hosted on three participants, 2-of-3 owner keys, no single operator.
+
+**Status (19 Sep).** Runs end to end on the DecMan LocalNet sandbox: three Canton participants, the registry as a decentralized party, the delegation granted by a 2-of-3 governance vote, then fingerprint, two facilities on two participants, draw, collision, release, retry, with the per-party ACS printed at the end (`demo/localnet.sh`). Stablecoin leg is a mock `Allocation` for now.
 
 ## The leak sentence
 
@@ -40,6 +42,14 @@ This matrix is not a UI filter: it is what each party's participant returns from
 5. On repayment the holder exercises `Claim_Release`; the hash is free again.
 6. A disputed hash can be force-released only through DecMan governance (`ClaimForceReleaseProposal`, threshold of registry members).
 
+## Governed where it belongs, routine where it must be
+
+The registry is externally signed (2 of 3 owner keys held by three DecMan nodes), so any transaction it authorises directly needs a multi-signature round. Routine settlement cannot wait for that. So the members vote once on a `GrantDelegationProposal` (custom `GovernableAction`), which creates a `RegistryDelegation` giving an automation party `ops` two delegated choices: `Delegation_Index` and `Delegation_Settle`. Inside them the authority is {registry, ops}, and the Daml checks are unchanged. `ops` can never settle without the delegation (asserted in the test), the members can revoke it at any time (`RevokeDelegationProposal`), and a disputed hash is only ever force-released by a vote (`ClaimForceReleaseProposal`).
+
+Negative case, from the ledger itself when a single member tries to execute: `The requirement 'Enough confirmations to execute action' was not met`. The threshold lives in the Daml `GovernanceRules`, not in DecMan.
+
+Honest scope: index admission is delegated in v1 (a rogue `ops` could open two indexes for one hash); moving `Delegation_Index` behind a vote is the next step. All three participants run in one Canton container on LocalNet, so "operator independence" is simulated, not proven.
+
 ## Why Canton and not the chain you already use
 
 - Sub-transaction privacy gives each lender its own projection; the registry is a stakeholder of `DrawRequest` and `Claim`, never of `Facility`.
@@ -54,8 +64,9 @@ daml/
   pledgeguard/            PledgeGuard.Registry, PledgeGuard.Lending (SDK 3.5.8, LF 2.2)
   pledgeguard-test/       Daml Script scenario with the privacy assertions, mock Allocation
   pledgeguard-governance/ ClaimForceReleaseProposal implementing DecMan GovernableAction (SDK 3.4.11 like DecMan)
-backend/                  registry automation (JSON Ledger API v2)
+backend/                  registry automation acting as `ops` (JSON Ledger API v2, no dependency)
 frontend/                 one window per party, "VIEWING AS" selector
+demo/localnet.sh          the whole thing on the DecMan LocalNet: setup, govern, backend, scenario, acs
 ```
 
 ## Run
@@ -65,10 +76,25 @@ frontend/                 one window per party, "VIEWING AS" selector
 ./daml/build.sh   # builds every DAR (SDK 3.5.8 + 3.4.11) and runs the scenario
 ```
 
-Expected: `scenario: ok`. The script covers happy path, collision, wrong index (`submitMustFail`), release and retry.
+Expected: `scenario: ok`. The script covers happy path, collision, wrong index (`submitMustFail`), release, retry, and revocation.
+
+### On LocalNet with the decentralized registry (about 20 minutes, Docker with 12 GB)
+
+```sh
+git clone -b hackathon https://github.com/DLC-link/decentralization-manager ../decman
+(cd ../decman && ./hackathon/up.sh && PARTY_PREFIX=pledgeguard-registry ./hackathon/seed.sh)
+./demo/localnet.sh setup          # DARs to the 3 participants, app parties (lender B on participant 2, auditor on 3)
+./demo/localnet.sh govern grant   # 2-of-3 vote: the registry delegates routine work to ops
+./demo/localnet.sh backend &      # registry automation
+./demo/localnet.sh scenario       # fingerprint, facilities, draw, collision, release, retry, per-party ACS
+./demo/localnet.sh govern-fail    # one confirmation only: execute is refused by the ledger
+```
+
+If your host already uses port 5432, start the sandbox with `DB_PORT=5433 ./hackathon/up.sh`.
 
 ## Known limits (v1)
 
+- The draw leg on LocalNet is a mock `Allocation` (same interface and controllers as Amulet/USDCx); wiring a real Amulet allocation on DevNet is next.
 - The registry sees draw amounts (see above). A two-phase clearance would hide them but is not atomic.
 - A matching fingerprint proves the same file was presented twice; it does not catch a freshly fabricated file describing the same collateral (CIP #245 says the same).
 - Repayment is off the contract in v1: the lender releases the claim once repaid.

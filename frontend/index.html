@@ -1,0 +1,93 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PledgeGuard</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; padding: 16px; background: #f7f7f5; color: #222; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .cfg { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .cfg input, .cfg select { padding: 6px; border: 1px solid #bbb; border-radius: 4px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .col { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 10px; min-height: 200px; }
+  .col h2 { font-size: 14px; margin: 0 0 8px; display: flex; justify-content: space-between; }
+  .c { border-left: 3px solid #999; padding: 4px 8px; margin: 6px 0; background: #fafafa; }
+  .c b { display: block; font-size: 12px; color: #555; }
+  .c.Facility { border-color: #2a7; } .c.DrawRequest { border-color: #27a; } .c.Claim { border-color: #a72; }
+  .c.CollisionNotice { border-color: #c22; background: #fff0f0; } .c.ClaimIndex { border-color: #888; }
+  .c.CollateralFingerprint { border-color: #7a2; }
+  .empty { color: #999; font-style: italic; }
+  pre { margin: 0; white-space: pre-wrap; font-size: 12px; }
+</style>
+
+<h1>PledgeGuard, one window per party (what each participant's ACS returns, no UI filtering)</h1>
+<div class="cfg">
+  <input id="url" size="50" placeholder="JSON Ledger API URL" value="http://localhost:7575">
+  <input id="parties" size="70" placeholder="parties as name=partyId,token;name=partyId,token">
+  <select id="viewAs"></select>
+  <button onclick="refresh()">Refresh</button>
+  <label><input type="checkbox" id="auto" checked> auto (3s)</label>
+</div>
+<div class="cols" id="cols"></div>
+
+<script>
+// Party config comes from the URL hash or the input:
+//   #url=http://localhost:7575&parties=LenderA=lenderA::1220..,eyJ..;LenderB=..;Registry=..;Auditor=..
+const q = new URLSearchParams(location.hash.slice(1));
+if (q.get("url")) url.value = q.get("url");
+if (q.get("parties")) parties.value = q.get("parties");
+
+function cfg() {
+  return parties.value.split(";").filter(Boolean).map((s) => {
+    const [name, rest] = s.split("=");
+    const [party, token] = rest.split(",");
+    return { name: name.trim(), party: party.trim(), token: (token || "").trim() };
+  });
+}
+
+async function acs({ party, token }) {
+  const base = url.value.replace(/\/$/, "");
+  const h = { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) };
+  const { offset } = await fetch(`${base}/v2/state/ledger-end`, { headers: h }).then((r) => r.json());
+  const body = {
+    activeAtOffset: offset,
+    verbose: false,
+    eventFormat: {
+      filtersByParty: { [party]: { cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } }] } },
+      verbose: false,
+    },
+  };
+  const rows = await fetch(`${base}/v2/state/active-contracts`, { method: "POST", headers: h, body: JSON.stringify(body) }).then((r) => r.json());
+  return rows.map((r) => r.contractEntry?.JsActiveContract?.createdEvent).filter(Boolean)
+    .filter((c) => c.templateId.includes("PledgeGuard")).map((c) => ({ offset, ...c }));
+}
+
+function render(name, contracts, offset) {
+  const items = contracts.length
+    ? contracts.map((c) => {
+        const t = c.templateId.split(":").pop();
+        const a = { ...c.createArgument };
+        return `<div class="c ${t}"><b>${t} <span style="float:right">${c.contractId.slice(0, 10)}…</span></b><pre>${JSON.stringify(a, null, 1).replace(/[{}"]/g, "")}</pre></div>`;
+      }).join("")
+    : `<div class="empty">empty ACS: this party is not a stakeholder of anything here</div>`;
+  return `<div class="col"><h2>${name}<span>offset ${offset ?? "?"}</span></h2>${items}</div>`;
+}
+
+async function refresh() {
+  const all = cfg();
+  const selected = viewAs.value;
+  const shown = all.filter((p) => !selected || p.name === selected || ["LenderA", "LenderB", "Registry"].includes(p.name));
+  const html = await Promise.all(shown.map(async (p) => {
+    try { const cs = await acs(p); return render(p.name, cs, cs[0]?.offset); }
+    catch (e) { return `<div class="col"><h2>${p.name}</h2><div class="empty">${e}</div></div>`; }
+  }));
+  cols.innerHTML = html.join("");
+}
+
+function fillViewAs() {
+  viewAs.innerHTML = `<option value="">VIEWING AS: lenders + registry</option>` + cfg().map((p) => `<option>${p.name}</option>`).join("");
+}
+parties.addEventListener("change", fillViewAs);
+viewAs.addEventListener("change", refresh);
+fillViewAs();
+refresh();
+setInterval(() => auto.checked && refresh(), 3000);
+</script>

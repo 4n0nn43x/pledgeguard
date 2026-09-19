@@ -1,0 +1,28 @@
+-- Governed action for the decentralized registry party: force-release a disputed hash.
+-- Any single host of `registry` cannot do this alone; DecMan's GovernanceRules executes
+-- it only once the member confirmation threshold is met (BitSafe challenge: shared control).
+module PledgeGuard.Governance.ForceRelease where
+
+import Governance.Action
+import PledgeGuard.Registry
+
+template ClaimForceReleaseProposal
+  with
+    governanceParty : Party          -- the decentralized registry party
+    proposer : Party                 -- a member of GovernanceRules
+    indexCid : ContractId ClaimIndex
+    reason : Text
+  where
+    signatory proposer
+    observer governanceParty
+    ensure reason /= ""
+
+    interface instance GovernableAction for ClaimForceReleaseProposal where
+      view = GovernableActionView with
+        governanceParty
+        proposer
+        actionLabel = "ClaimForceRelease"
+        description = "Force-release collateral index " <> show indexCid <> ": " <> reason
+      executeImpl = do
+        exercise indexCid ClaimIndex_Release
+        pure ()

@@ -1,0 +1,78 @@
+-- Registry side of PledgeGuard: what the neutral registry party signs and sees.
+-- The registry never holds a Facility. It only sees fingerprints (schemaId + hash),
+-- one index contract per hash, one claim per live draw, and collision notices.
+-- Vocabulary follows CIP #245 (schemaId, hash). Contract keys are gone in LF 2.2,
+-- so per-hash uniqueness is enforced by the registry being the sole signatory of
+-- ClaimIndex and creating exactly one per hash (answer to CIP #245 open question 4).
+module PledgeGuard.Registry where
+
+-- | Originator's attestation: "this collateral file exists and has this fingerprint".
+-- No economic term. The registry reacts by creating the ClaimIndex for the hash.
+template CollateralFingerprint
+  with
+    originator : Party
+    registry : Party
+    schemaId : Text   -- e.g. "receivables-pool-v1", the normalised field set that was hashed
+    hash : Text       -- sha256 over the schema's identifying fields, never over a PDF
+  where
+    signatory originator
+    observer registry
+
+    -- The registry opens the index; done once per hash by the registry automation.
+    choice CollateralFingerprint_Index : ContractId ClaimIndex
+      controller registry
+      do create ClaimIndex with registry, schemaId, hash, holder = None
+
+-- | One per hash. `holder` is the lender whose draw is live; it observes the index
+-- while it holds it (needed to release), nobody else ever sees it.
+template ClaimIndex
+  with
+    registry : Party
+    schemaId : Text
+    hash : Text
+    holder : Optional Party
+  where
+    signatory registry
+    observer holder
+
+    choice ClaimIndex_Occupy : ContractId ClaimIndex
+      with lender : Party
+      controller registry
+      do
+        assertMsg "hash already claimed" (holder == None)
+        create this with holder = Some lender
+
+    choice ClaimIndex_Release : ContractId ClaimIndex
+      controller registry
+      do create this with holder = None
+
+-- | Proof, shared by the registry and the lender only, that this lender's draw is
+-- secured by `hash`. No amount, no rate; the originator is not a stakeholder.
+template Claim
+  with
+    registry : Party
+    lender : Party
+    hash : Text
+    indexCid : ContractId ClaimIndex
+    openedAt : Time
+  where
+    signatory registry, lender
+
+    -- On repayment the lender frees the hash. Registry authority comes from its signature.
+    choice Claim_Release : ContractId ClaimIndex
+      controller lender
+      do exercise indexCid ClaimIndex_Release
+
+-- | One notice per recipient so a lender never learns who the other lender is.
+-- The auditor sees every notice and nothing else.
+template CollisionNotice
+  with
+    registry : Party
+    recipient : Party
+    auditor : Party
+    schemaId : Text
+    hash : Text
+    at : Time
+  where
+    signatory registry
+    observer recipient, auditor

@@ -1,0 +1,96 @@
+-- Lender side of PledgeGuard. A Facility is strictly bilateral (lender, originator).
+-- The only thing the registry ever touches is a DrawRequest, which carries the hash
+-- and the token-standard Allocation of the draw, never the facility terms.
+module PledgeGuard.Lending where
+
+import Splice.Api.Token.AllocationV1
+import Splice.Api.Token.MetadataV1 (ExtraArgs(..), emptyChoiceContext, emptyMetadata)
+import PledgeGuard.Registry
+
+template FacilityProposal
+  with
+    lender : Party
+    originator : Party
+    registry : Party
+    schemaId : Text
+    hash : Text
+    amount : Decimal
+    rate : Decimal
+    maturity : Time
+  where
+    signatory lender
+    observer originator
+
+    choice FacilityProposal_Accept : ContractId Facility
+      controller originator
+      do create Facility with ..
+
+template Facility
+  with
+    lender : Party
+    originator : Party
+    registry : Party
+    schemaId : Text
+    hash : Text
+    amount : Decimal
+    rate : Decimal
+    maturity : Time
+  where
+    signatory lender, originator
+    ensure amount > 0.0
+
+    -- The lender has already allocated the stablecoin leg (sender = lender,
+    -- receiver = originator, executor = registry). Settlement is delegated to the registry.
+    nonconsuming choice Facility_RequestDraw : ContractId DrawRequest
+      with allocationCid : ContractId Allocation
+      controller lender
+      do create DrawRequest with lender, originator, registry, schemaId, hash, allocationCid
+
+data SettleResult
+  = Settled (ContractId Claim)
+  | Collided (ContractId CollisionNotice)
+  deriving (Eq, Show)
+
+-- | Visible to lender, originator and registry. Carries no economic term of the
+-- Facility; the registry does see the draw leg it executes (amount in the Allocation).
+template DrawRequest
+  with
+    lender : Party
+    originator : Party
+    registry : Party
+    schemaId : Text
+    hash : Text
+    allocationCid : ContractId Allocation
+  where
+    signatory lender, originator
+    observer registry
+
+    -- Authority inside this choice is {lender, originator} (signatories) + {registry}
+    -- (controller): enough to occupy the index, sign the Claim and execute the
+    -- Allocation whose controllers are executor (registry), sender (lender) and
+    -- receiver (originator). Check and transfer are one atomic transaction.
+    choice DrawRequest_Settle : SettleResult
+      with
+        indexCid : ContractId ClaimIndex
+        auditor : Party
+      controller registry
+      do
+        idx <- fetch indexCid
+        assertMsg "index does not match the request" (idx.hash == hash && idx.registry == registry)
+        now <- getTime
+        case idx.holder of
+          Some other -> do
+            -- Collision: no transfer. Each lender gets its own notice; neither learns the other.
+            create CollisionNotice with registry, recipient = other, auditor, schemaId, hash, at = now
+            mine <- create CollisionNotice with registry, recipient = lender, auditor, schemaId, hash, at = now
+            pure (Collided mine)
+          None -> do
+            newIdx <- exercise indexCid ClaimIndex_Occupy with lender
+            claim <- create Claim with registry, lender, hash, indexCid = newIdx, openedAt = now
+            exercise allocationCid Allocation_ExecuteTransfer with
+              extraArgs = ExtraArgs with context = emptyChoiceContext, meta = emptyMetadata
+            pure (Settled claim)
+
+    choice DrawRequest_Withdraw : ()
+      controller lender
+      do pure ()

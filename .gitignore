@@ -6,3 +6,6 @@ dist/
 .env
 demo/.state
 demo/.registry-state.json
+demo/.devnet.env
+demo/.devnet.token
+demo/.devnet-registry-state.json

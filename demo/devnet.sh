@@ -155,7 +155,7 @@ acs_() {
 txids_() { # every update this user's parties saw, newest last: for the README evidence
   local off; off=$(api GET /v2/state/ledger-end | jq '.offset')
   api POST "/v2/updates?limit=200" "$(jq -n --arg p "$REGISTRY" --argjson e "$off" \
-    '{beginExclusive: 0, endInclusive: $e, updateFormat: {includeTransactions: {transactionShape: "TRANSACTION_SHAPE_ACS_DELTA", eventFormat: {filtersByParty: {($p): {cumulative: [{identifierFilter: {WildcardFilter: {value: {includeCreatedEventBlob: false}}}}]}}, verbose: false}}}}')" \
+    '{beginExclusive: ($e - 400), endInclusive: $e, updateFormat: {includeTransactions: {transactionShape: "TRANSACTION_SHAPE_ACS_DELTA", eventFormat: {filtersByParty: {($p): {cumulative: [{identifierFilter: {WildcardFilter: {value: {includeCreatedEventBlob: false}}}}]}}, verbose: false}}}}')" \
     | jq -r '.[] | .update.Transaction.value? // empty | "offset \(.offset)  \(.updateId)  " + ([.events[] | (.CreatedEvent // .ArchivedEvent).templateId | split(":") | .[-1]] | join(","))'
 }
 

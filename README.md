@@ -7,7 +7,30 @@ HackCanton Season #3, track RWA & Business Workflows. Answer to [CIP #245](https
 
 **What PledgeGuard does.** A lender's stablecoin draw is released only after proving, in the same atomic transaction and without revealing its facility, that the collateral fingerprint is not already securing a live draw. The check is performed by a neutral **registry party** that sees hashes, not terms. The registry is a **Decentralized Party** created with BitSafe's [Decentralization Manager](https://github.com/DLC-link/decentralization-manager): hosted on three participants, 2-of-3 owner keys, no single operator.
 
-**Status (19 Sep).** Runs end to end on the DecMan LocalNet sandbox: three Canton participants, the registry as a decentralized party, the delegation granted by a 2-of-3 governance vote, then fingerprint, two facilities on two participants, draw, collision, release, retry, with the per-party ACS printed at the end (`demo/localnet.sh`). Stablecoin leg is a mock `Allocation` for now.
+**Status (24 Sep).** Runs end to end in two places. On the **DecMan LocalNet sandbox**: three Canton participants, the registry as a decentralized party, the delegation granted by a 2-of-3 governance vote, the negative case refused by the ledger (`demo/localnet.sh`). On the **shared HackCanton DevNet node**: the same flow against the live network, Ledger API 3.5.18, evidence below (`demo/devnet.sh`). The stablecoin leg is still a mock `Allocation`, same interface and controllers as Amulet.
+
+### DevNet evidence, run of 24 Sep 2026
+
+Node `hackcanton-devnet-3`, packages `pledgeguard 0.2.0` and `pledgeguard-test 0.2.0` vetted, six parties under the namespace `64bf737a-`. Collateral fingerprint of this run: `500fbc479a202cb52446a0575f41f387a32e89fd669124a7ef9ae47c8d03eb79`.
+
+| Offset | Update id | What happened |
+|---|---|---|
+| 1049806 | `1220482e1751a195...6b1a2c5` | `RegistryDelegation` granted to the automation party |
+| 1049859 | `12203b91cda795ce...d414412` | fingerprint registered, registry opens the `ClaimIndex` |
+| 1049913 | `12205509cee329b9...8f2655fd` | **lender A draws**: index occupied, `Claim` created, transfer executed, one transaction |
+| 1049937 | `12200ac0585d39a4...544513c1` | **lender B draws on the same hash**: no transfer, one `CollisionNotice` per lender |
+| 1049946 | `12206d03a6a87c4f...10a0762` | lender A repays, `Claim_Release`, the hash is free |
+| 1049970 | `12205454890ede8b...f5790ece` | lender B retries: settles |
+
+Active contracts per party at offset 1049978, straight from each party's `/v2/state/active-contracts`:
+
+| Party | What it holds |
+|---|---|
+| originator | both facilities |
+| lender A | its facility, its own collision notice |
+| lender B | its facility, its own collision notice, the live `ClaimIndex` and `Claim` |
+| registry | the delegation, both notices, the index, the claim, **no facility** |
+| auditor | the two collision notices, nothing else |
 
 ## The leak sentence
 

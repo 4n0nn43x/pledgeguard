@@ -6,14 +6,14 @@
 #   PARTY_PREFIX=pledgeguard-registry ./hackathon/seed.sh   # registry = decentralized party, 2 of 3
 #
 # Then, from this repo:
-#   ./demo/localnet.sh setup     # upload DARs to the 3 participants, allocate the app parties
-#   ./demo/localnet.sh govern grant           # 2-of-3 vote: registry delegates routine work to ops
-#   ./demo/localnet.sh govern-fail            # negative case: one confirmation, execute is refused
-#   ./demo/localnet.sh backend   # run the registry automation (keep it running in a terminal)
-#   ./demo/localnet.sh scenario  # fingerprint, two facilities, draw A, draw B collides, release, retry
-#   ./demo/localnet.sh acs       # print what each party's participant returns (the privacy matrix)
-#   ./demo/localnet.sh govern force-release <indexCid> "<reason>"   # disputed hash, members decide
-#   ./demo/localnet.sh govern revoke "<reason>"                     # cut ops off, settlements stop
+#   ./scripts/localnet.sh setup     # upload DARs to the 3 participants, allocate the app parties
+#   ./scripts/localnet.sh govern grant           # 2-of-3 vote: registry delegates routine work to ops
+#   ./scripts/localnet.sh govern-fail            # negative case: one confirmation, execute is refused
+#   ./scripts/localnet.sh backend   # run the registry automation (keep it running in a terminal)
+#   ./scripts/localnet.sh scenario  # fingerprint, two facilities, draw A, draw B collides, release, retry
+#   ./scripts/localnet.sh acs       # print what each party's participant returns (the privacy matrix)
+#   ./scripts/localnet.sh govern force-release <indexCid> "<reason>"   # disputed hash, members decide
+#   ./scripts/localnet.sh govern revoke "<reason>"                     # cut ops off, settlements stop
 #
 # Party placement: originator + lender A on participant 1, lender B on participant 2, auditor on
 # participant 3, registry on all three (that is the decentralized party).

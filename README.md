@@ -7,7 +7,7 @@ HackCanton Season #3, track RWA & Business Workflows. Answer to [CIP #245](https
 
 **What PledgeGuard does.** A lender's stablecoin draw is released only after proving, in the same atomic transaction and without revealing its facility, that the collateral fingerprint is not already securing a live draw. The check is performed by a neutral **registry party** that sees hashes, not terms. The registry is a **Decentralized Party** created with BitSafe's [Decentralization Manager](https://github.com/DLC-link/decentralization-manager): hosted on three participants, 2-of-3 owner keys, no single operator.
 
-**Status (24 Sep).** Runs end to end in two places. On the **DecMan LocalNet sandbox**: three Canton participants, the registry as a decentralized party, the delegation granted by a 2-of-3 governance vote, the negative case refused by the ledger (`demo/localnet.sh`). On the **shared HackCanton DevNet node**: the same flow against the live network, Ledger API 3.5.18, evidence below (`demo/devnet.sh`). The stablecoin leg is still a mock `Allocation`, same interface and controllers as Amulet.
+**Status (24 Sep).** Runs end to end in two places. On the **DecMan LocalNet sandbox**: three Canton participants, the registry as a decentralized party, the delegation granted by a 2-of-3 governance vote, the negative case refused by the ledger (`scripts/localnet.sh`). On the **shared HackCanton DevNet node**: the same flow against the live network, Ledger API 3.5.18, evidence below (`scripts/devnet.sh`). The stablecoin leg is still a mock `Allocation`, same interface and controllers as Amulet.
 
 ### DevNet evidence, run of 24 Sep 2026
 
@@ -89,7 +89,8 @@ daml/
   pledgeguard-governance/ ClaimForceReleaseProposal implementing DecMan GovernableAction (SDK 3.4.11 like DecMan)
 backend/                  registry automation acting as `ops` (JSON Ledger API v2, no dependency)
 frontend/                 one window per party, "VIEWING AS" selector
-demo/localnet.sh          the whole thing on the DecMan LocalNet: setup, govern, backend, scenario, acs
+scripts/localnet.sh       reproduce the whole thing on the DecMan LocalNet: setup, govern, backend, scenario, acs
+scripts/devnet.sh         the same against the shared HackCanton DevNet node
 ```
 
 ## Run
@@ -106,11 +107,11 @@ Expected: `scenario: ok`. The script covers happy path, collision, wrong index (
 ```sh
 git clone -b hackathon https://github.com/DLC-link/decentralization-manager ../decman
 (cd ../decman && ./hackathon/up.sh && PARTY_PREFIX=pledgeguard-registry ./hackathon/seed.sh)
-./demo/localnet.sh setup          # DARs to the 3 participants, app parties (lender B on participant 2, auditor on 3)
-./demo/localnet.sh govern grant   # 2-of-3 vote: the registry delegates routine work to ops
-./demo/localnet.sh backend &      # registry automation
-./demo/localnet.sh scenario       # fingerprint, facilities, draw, collision, release, retry, per-party ACS
-./demo/localnet.sh govern-fail    # one confirmation only: execute is refused by the ledger
+./scripts/localnet.sh setup          # DARs to the 3 participants, app parties (lender B on participant 2, auditor on 3)
+./scripts/localnet.sh govern grant   # 2-of-3 vote: the registry delegates routine work to ops
+./scripts/localnet.sh backend &      # registry automation
+./scripts/localnet.sh scenario       # fingerprint, facilities, draw, collision, release, retry, per-party ACS
+./scripts/localnet.sh govern-fail    # one confirmation only: execute is refused by the ledger
 ```
 
 If your host already uses port 5432, start the sandbox with `DB_PORT=5433 ./hackathon/up.sh`.

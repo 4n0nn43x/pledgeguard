@@ -9,9 +9,9 @@
 #      and create four parties: originator, lenderA, lenderB, auditor, registry-ops.
 #      (On DevNet the registry is a single party, not a decentralized one: the shared node
 #      cannot host a 2-of-3 party. The decentralized registry is demonstrated on LocalNet,
-#      see demo/localnet.sh.) https://console.participant.hackcanton-01.devnet.naas.noders.services
+#      see scripts/localnet.sh.) https://console.participant.hackcanton-01.devnet.naas.noders.services
 #   3. Console > Collections > Upload DAR, for pledgeguard-0.2.0.dar and pledgeguard-test-0.2.0.dar.
-#   4. Write demo/.devnet.env (gitignored, never committed):
+#   4. Write scripts/.devnet.env (gitignored, never committed):
 #        DEVNET_EMAIL=you@example.com
 #        DEVNET_PASSWORD=...
 #        REGISTRY=<party id you use as the registry>
@@ -22,13 +22,13 @@
 #        AUDITOR=<party id>
 #
 # Then:
-#   ./demo/devnet.sh whoami     # token, user id, rights: checks the setup
-#   ./demo/devnet.sh parties    # list the parties your user can act as
-#   ./demo/devnet.sh delegate   # create the RegistryDelegation (single-party registry on DevNet)
-#   ./demo/devnet.sh backend    # registry automation against DevNet
-#   ./demo/devnet.sh scenario   # fingerprint, two facilities, draw, collision, release, retry
-#   ./demo/devnet.sh acs        # per-party ACS, the privacy matrix, with the ledger offset
-#   ./demo/devnet.sh txids      # collect update ids of this run, for the README
+#   ./scripts/devnet.sh whoami     # token, user id, rights: checks the setup
+#   ./scripts/devnet.sh parties    # list the parties your user can act as
+#   ./scripts/devnet.sh delegate   # create the RegistryDelegation (single-party registry on DevNet)
+#   ./scripts/devnet.sh backend    # registry automation against DevNet
+#   ./scripts/devnet.sh scenario   # fingerprint, two facilities, draw, collision, release, retry
+#   ./scripts/devnet.sh acs        # per-party ACS, the privacy matrix, with the ledger offset
+#   ./scripts/devnet.sh txids      # collect update ids of this run, for the README
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -114,7 +114,7 @@ wait_settled() { # party draw-cid
     acs_of "$1" | jq -e --arg c "$2" 'map(select(.contractId == $c)) | length == 0' >/dev/null && return 0
     sleep 1
   done
-  echo "draw $2 not settled after 40s, is ./demo/devnet.sh backend running?" >&2; return 1
+  echo "draw $2 not settled after 40s, is ./scripts/devnet.sh backend running?" >&2; return 1
 }
 
 scenario_() {

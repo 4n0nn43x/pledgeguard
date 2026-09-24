@@ -4,8 +4,8 @@
 node_modules/
 dist/
 .env
-demo/.state
-demo/.registry-state.json
-demo/.devnet.env
-demo/.devnet.token
-demo/.devnet-registry-state.json
+scripts/.state
+scripts/.registry-state.json
+scripts/.devnet.env
+scripts/.devnet.token
+scripts/.devnet-registry-state.json

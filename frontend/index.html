@@ -1,94 +1,117 @@
 <!doctype html>
+<html lang="en">
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PledgeGuard</title>
 <link rel="icon" href="favicon.png">
 <style>
-  body { font: 14px system-ui, sans-serif; margin: 0; padding: 16px; background: #f7f7f5; color: #222; }
-  h1 { font-size: 18px; margin: 0 0 12px; }
-  .cfg { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-  .cfg input, .cfg select { padding: 6px; border: 1px solid #bbb; border-radius: 4px; }
-  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
-  .col { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 10px; min-height: 200px; }
-  .col h2 { font-size: 14px; margin: 0 0 8px; display: flex; justify-content: space-between; }
-  .c { border-left: 3px solid #999; padding: 4px 8px; margin: 6px 0; background: #fafafa; }
-  .c b { display: block; font-size: 12px; color: #555; }
-  .c.Facility { border-color: #2a7; } .c.DrawRequest { border-color: #27a; } .c.Claim { border-color: #a72; }
-  .c.CollisionNotice { border-color: #c22; background: #fff0f0; } .c.ClaimIndex { border-color: #888; }
-  .c.CollateralFingerprint { border-color: #7a2; }
-  .empty { color: #999; font-style: italic; }
-  pre { margin: 0; white-space: pre-wrap; font-size: 12px; }
+  :root {
+    --navy: #0f2a4a; --teal: #2a9d8f; --bg: #0b1017; --panel: #121a24; --line: #1e2a38;
+    --text: #e6edf3; --dim: #8496a8; --red: #e5484d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 "Inter", "Manrope", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header img { height: 30px; }
+  header .sub { color: var(--dim); font-size: 13px; }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--dim); }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 13px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; padding: 16px 20px; align-items: start; }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-height: 260px; overflow: hidden; }
+  .col > h2 { margin: 0; padding: 12px 14px; font-size: 15px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .col > h2 small { color: var(--dim); font-weight: 400; font-size: 12px; text-align: right; }
+  .col.registry > h2 { border-bottom-color: var(--teal); }
+  .body { padding: 10px 14px 14px; }
+  .c { border-left: 3px solid var(--line); padding: 8px 10px; margin: 9px 0; background: #0e151e; border-radius: 0 6px 6px 0; }
+  .c .t { font-weight: 600; font-size: 13px; letter-spacing: .01em; }
+  .c dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; font-size: 12.5px; }
+  .c dt { color: var(--dim); }
+  .c dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .Facility { border-left-color: #3b82f6; }
+  .Claim, .ClaimIndex { border-left-color: var(--teal); }
+  .CollateralFingerprint, .RegistryDelegation { border-left-color: #64748b; }
+  .CollisionNotice { border-left-color: var(--red); background: #1e1013; }
+  .CollisionNotice .t::before { content: "⚠ "; }
+  .empty { color: var(--dim); font-style: italic; padding: 24px 0; text-align: center; font-size: 13px; }
+  code.mono { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 12px; color: var(--dim); }
+  .err { color: var(--red); font-size: 12px; }
 </style>
 
-<h1>PledgeGuard, one window per party (what each participant's ACS returns, no UI filtering)</h1>
-<div class="cfg">
-  <input id="url" size="50" placeholder="JSON Ledger API URL" value="http://localhost:7575">
-  <input id="parties" size="70" placeholder="parties as name=partyId,token;name=partyId,token">
-  <select id="viewAs"></select>
-  <button onclick="refresh()">Refresh</button>
-  <label><input type="checkbox" id="auto" checked> auto (3s)</label>
-</div>
+<header>
+  <img src="logo-dark.svg" alt="PledgeGuard" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'PledgeGuard'}))">
+  <span class="sub">what each party's own participant returns from <code class="mono">/v2/state/active-contracts</code>. No UI filtering.</span>
+  <span class="right">
+    <label>VIEWING AS <select id="viewAs"></select></label>
+    <span id="offset"></span>
+  </span>
+</header>
 <div class="cols" id="cols"></div>
 
 <script>
-// Party config comes from the URL hash or the input:
-//   #url=http://localhost:7575&parties=LenderA=lenderA::1220..,eyJ..;LenderB=..;Registry=..;Auditor=..
-const q = new URLSearchParams(location.hash.slice(1));
-if (q.get("url")) url.value = q.get("url");
-if (q.get("parties")) parties.value = q.get("parties");
+const TEMPLATES = {
+  CollateralFingerprint: ["schemaId", "hash"],
+  Facility: ["lender", "amount", "rate", "maturity", "hash"],
+  FacilityProposal: ["lender", "amount", "rate"],
+  DrawRequest: ["lender", "hash"],
+  ClaimIndex: ["hash", "holder"],
+  Claim: ["lender", "hash", "openedAt"],
+  CollisionNotice: ["recipient", "hash", "at"],
+  RegistryDelegation: ["ops"],
+  MockAllocation: ["sender", "receiver", "amount"],
+};
+const short = (v) => typeof v === "string"
+  ? (v.includes("::") ? v.split("::")[0] : v.length > 24 ? v.slice(0, 10) + "…" + v.slice(-6) : v)
+  : v === null ? "—" : String(v);
 
-function cfg() {
-  return parties.value.split(";").filter(Boolean).map((s) => {
-    const [name, rest] = s.split("=");
-    const [party, token] = rest.split(",");
-    return { name: name.trim(), party: party.trim(), token: (token || "").trim() };
+let parties = [], selected = "";
+
+async function post(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error((await r.text()).slice(0, 180));
+  return r.json();
+}
+
+async function acs(party, offset) {
+  const rows = await post("/api/v2/state/active-contracts", {
+    activeAtOffset: offset, verbose: false,
+    eventFormat: { filtersByParty: { [party]: { cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } }] } }, verbose: false },
   });
-}
-
-async function acs({ party, token }) {
-  const base = url.value.replace(/\/$/, "");
-  const h = { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) };
-  const { offset } = await fetch(`${base}/v2/state/ledger-end`, { headers: h }).then((r) => r.json());
-  const body = {
-    activeAtOffset: offset,
-    verbose: false,
-    eventFormat: {
-      filtersByParty: { [party]: { cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } }] } },
-      verbose: false,
-    },
-  };
-  const rows = await fetch(`${base}/v2/state/active-contracts`, { method: "POST", headers: h, body: JSON.stringify(body) }).then((r) => r.json());
   return rows.map((r) => r.contractEntry?.JsActiveContract?.createdEvent).filter(Boolean)
-    .filter((c) => c.templateId.includes("PledgeGuard")).map((c) => ({ offset, ...c }));
+    .filter((c) => c.templateId.includes("PledgeGuard"))
+    .map((c) => ({ t: c.templateId.split(":").pop(), a: c.createArgument, cid: c.contractId }));
 }
 
-function render(name, contracts, offset) {
-  const items = contracts.length
-    ? contracts.map((c) => {
-        const t = c.templateId.split(":").pop();
-        const a = { ...c.createArgument };
-        return `<div class="c ${t}"><b>${t} <span style="float:right">${c.contractId.slice(0, 10)}…</span></b><pre>${JSON.stringify(a, null, 1).replace(/[{}"]/g, "")}</pre></div>`;
-      }).join("")
-    : `<div class="empty">empty ACS: this party is not a stakeholder of anything here</div>`;
-  return `<div class="col"><h2>${name}<span>offset ${offset ?? "?"}</span></h2>${items}</div>`;
+function card({ t, a, cid }) {
+  const keys = (TEMPLATES[t] ?? Object.keys(a)).filter((k) => a[k] !== undefined);
+  const rows = keys.map((k) => `<dt>${k}</dt><dd>${short(a[k])}</dd>`).join("");
+  return `<div class="c ${t}"><div class="t">${t}</div><dl>${rows}</dl></div>`;
 }
 
 async function refresh() {
-  const all = cfg();
-  const selected = viewAs.value;
-  const shown = all.filter((p) => !selected || p.name === selected || ["LenderA", "LenderB", "Registry"].includes(p.name));
-  const html = await Promise.all(shown.map(async (p) => {
-    try { const cs = await acs(p); return render(p.name, cs, cs[0]?.offset); }
-    catch (e) { return `<div class="col"><h2>${p.name}</h2><div class="empty">${e}</div></div>`; }
-  }));
-  cols.innerHTML = html.join("");
+  const { offset } = await (await fetch("/api/v2/state/ledger-end")).json();
+  document.getElementById("offset").textContent = "offset " + offset;
+  const shown = selected ? parties.filter((p) => p.name === selected) : parties.filter((p) => p.name !== "Auditor");
+  document.getElementById("cols").innerHTML = (await Promise.all(shown.map(async (p) => {
+    let inner;
+    try {
+      const cs = await acs(p.party, offset);
+      inner = cs.length ? cs.map(card).join("")
+        : `<div class="empty">empty: this party is not a stakeholder of anything here</div>`;
+    } catch (e) { inner = `<div class="err">${e.message}</div>`; }
+    return `<section class="col ${p.name.toLowerCase().replace(/\s/g, "")}">
+      <h2>${p.name}<small>${p.role}<br><code class="mono">${p.party.split("::")[0]}</code></small></h2>
+      <div class="body">${inner}</div></section>`;
+  }))).join("");
 }
 
-function fillViewAs() {
-  viewAs.innerHTML = `<option value="">VIEWING AS: lenders + registry</option>` + cfg().map((p) => `<option>${p.name}</option>`).join("");
-}
-parties.addEventListener("change", fillViewAs);
-viewAs.addEventListener("change", refresh);
-fillViewAs();
-refresh();
-setInterval(() => auto.checked && refresh(), 3000);
+(async () => {
+  ({ parties } = await (await fetch("/config")).json());
+  const sel = document.getElementById("viewAs");
+  sel.innerHTML = `<option value="">all but the auditor</option>` + parties.map((p) => `<option>${p.name}</option>`).join("");
+  sel.onchange = () => { selected = sel.value; refresh(); };
+  refresh();
+  setInterval(refresh, 4000);
+})();
 </script>
+</html>

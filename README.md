@@ -88,7 +88,8 @@ daml/
   pledgeguard-test/       Daml Script scenario with the privacy assertions, mock Allocation
   pledgeguard-governance/ ClaimForceReleaseProposal implementing DecMan GovernableAction (SDK 3.4.11 like DecMan)
 backend/                  registry automation acting as `ops` (JSON Ledger API v2, no dependency)
-frontend/                 one window per party, "VIEWING AS" selector
+frontend/                 one window per party, "VIEWING AS" selector, plus a 90-line server
+                          that holds the token and proxies the JSON Ledger API
 scripts/localnet.sh       reproduce the whole thing on the DecMan LocalNet: setup, govern, backend, scenario, acs
 scripts/devnet.sh         the same against the shared HackCanton DevNet node
 ```
@@ -115,6 +116,23 @@ git clone -b hackathon https://github.com/DLC-link/decentralization-manager ../d
 ```
 
 If your host already uses port 5432, start the sandbox with `DB_PORT=5433 ./hackathon/up.sh`.
+
+### The party views
+
+```sh
+node frontend/server.mjs     # http://localhost:8090, reads scripts/.devnet.env
+```
+
+One column per party, refreshed every 4 seconds, plus a "VIEWING AS" selector. Nothing is
+filtered in the page: each column is one `/v2/state/active-contracts` call for that party and
+shows whatever comes back. Select the auditor and the screen holds two collision notices and
+nothing else.
+
+Honest note: the demo drives all parties from one ledger user that has `CanActAs` on each of
+them, because the shared DevNet node gives every team one user. The separation on screen is not
+that user's permissions, it is Canton's projection: the query is per party, and a party that is
+not a stakeholder of a contract never receives it. On LocalNet the same views run against three
+different participants, which removes the doubt entirely.
 
 ## Known limits (v1)
 

@@ -7,8 +7,12 @@
 //   DrawRequest created            -> Delegation_Settle with the current index
 // commandId is derived from the triggering contract id, so a restart never double-settles.
 //
+// Settling a real token-standard allocation needs the token registry's choice context, which
+// is off-ledger: TOKEN_REGISTRY_URL is the registry base URL (Amulet on DevNet: the scan API).
+// Without it the choice context is empty, which is what the mock allocation in the tests expects.
+//
 // env: LEDGER_URL, TOKEN (JWT, optional on LocalNet), USER_ID (needs CanActAs ops and
-//      CanReadAs registry), OPS_PARTY, REGISTRY_PARTY, AUDITOR_PARTY,
+//      CanReadAs registry), OPS_PARTY, REGISTRY_PARTY, AUDITOR_PARTY, TOKEN_REGISTRY_URL,
 //      STATE_FILE (offset persistence, default ./registry-state.json), POLL_MS (default 1000)
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -22,6 +26,10 @@ const OPS = env("OPS_PARTY");
 const AUDITOR = env("AUDITOR_PARTY");
 const STATE_FILE = env("STATE_FILE", "./registry-state.json");
 const POLL_MS = Number(env("POLL_MS", "1000"));
+const REGISTRY_URL = (process.env.TOKEN_REGISTRY_URL ?? "").replace(/\/$/, "");
+// Several versions of the app package can be vetted at once; pin the one this build expects,
+// otherwise the ledger resolves #pledgeguard to an older version and rejects new choice fields.
+const PKG_PREF = (process.env.PACKAGE_PREFERENCE ?? "").split(",").filter(Boolean);
 
 const PKG = "#pledgeguard";
 const T = {
@@ -51,7 +59,24 @@ const eventFormat = {
   verbose: false,
 };
 
-async function exercise(templateId, contractId, choice, choiceArgument, commandId) {
+// The registry publishes, per allocation, the context and reference contracts needed to execute
+// the transfer. Returns the empty context when no registry is configured (mock allocations).
+async function executeTransferContext(allocationCid) {
+  if (!REGISTRY_URL) return { context: { values: {} }, disclosed: [] };
+  const res = await fetch(`${REGISTRY_URL}/registry/allocations/v1/${encodeURIComponent(allocationCid)}/choice-contexts/execute-transfer`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+  });
+  if (!res.ok) throw new Error(`registry context ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const c = await res.json();
+  return {
+    context: c.choiceContextData ?? { values: {} },
+    // the ledger rejects unknown fields, so keep only what a DisclosedContract carries
+    disclosed: (c.disclosedContracts ?? []).map(({ templateId, contractId, createdEventBlob, synchronizerId }) =>
+      ({ templateId, contractId, createdEventBlob, synchronizerId })),
+  };
+}
+
+async function exercise(templateId, contractId, choice, choiceArgument, commandId, disclosedContracts = []) {
   try {
     await api("/v2/commands/submit-and-wait", {
       commands: [{ ExerciseCommand: { templateId, contractId, choice, choiceArgument } }],
@@ -59,14 +84,17 @@ async function exercise(templateId, contractId, choice, choiceArgument, commandI
       actAs: [OPS],
       readAs: [REGISTRY],
       userId: USER_ID,
+      disclosedContracts,
+      packageIdSelectionPreference: PKG_PREF,
     });
     console.log(`${choice} ok (${commandId})`);
   } catch (e) {
     // ALREADY_EXISTS = duplicate commandId after a restart, the work is already done.
     // CONTRACT_NOT_ACTIVE = someone raced us (e.g. lender withdrew). Anything else is worth seeing.
     const msg = String(e.message);
-    if (/DUPLICATE_COMMAND|ALREADY_EXISTS|CONTRACT_NOT_ACTIVE|CONTRACT_NOT_FOUND/.test(msg)) console.log(`${choice} skipped: ${msg.slice(0, 160)}`);
-    else throw e;
+    // Never let one bad contract stop the automation: log it and keep serving the others.
+    // Stale contracts from an older package version end up here after an upgrade.
+    console.log(`${choice} failed on ${contractId.slice(0, 12)}: ${msg.slice(0, 200)}`);
   }
 }
 
@@ -99,7 +127,10 @@ async function settlePending() {
   for (const ev of pendingDraws.splice(0)) {
     const indexCid = indexByHash.get(ev.createArgument.hash);
     if (!indexCid) { console.log(`no index yet for ${ev.createArgument.hash}, retrying later`); pendingDraws.push(ev); continue; }
-    await exercise(T.delegation, delegationCid, "Delegation_Settle", { drawCid: ev.contractId, indexCid, auditor: AUDITOR }, `settle-${ev.contractId}`);
+    const { context, disclosed } = await executeTransferContext(ev.createArgument.allocationCid);
+    await exercise(T.delegation, delegationCid, "Delegation_Settle",
+      { drawCid: ev.contractId, indexCid, auditor: AUDITOR, extraArgs: REGISTRY_URL ? { context, meta: { values: {} } } : null },
+      `settle-${ev.contractId}`, disclosed);
   }
 }
 

@@ -7,22 +7,29 @@ HackCanton Season #3, track RWA & Business Workflows. Answer to [CIP #245](https
 
 **What PledgeGuard does.** A lender's stablecoin draw is released only after proving, in the same atomic transaction and without revealing its facility, that the collateral fingerprint is not already securing a live draw. The check is performed by a neutral **registry party** that sees hashes, not terms. The registry is a **Decentralized Party** created with BitSafe's [Decentralization Manager](https://github.com/DLC-link/decentralization-manager): hosted on three participants, 2-of-3 owner keys, no single operator.
 
-**Status (24 Sep).** Runs end to end in two places. On the **DecMan LocalNet sandbox**: three Canton participants, the registry as a decentralized party, the delegation granted by a 2-of-3 governance vote, the negative case refused by the ledger (`scripts/localnet.sh`). On the **shared HackCanton DevNet node**: the same flow against the live network, Ledger API 3.5.18, evidence below (`scripts/devnet.sh`). The stablecoin leg is still a mock `Allocation`, same interface and controllers as Amulet.
+**Status (24 Sep).** Runs end to end in two places. On the **DecMan LocalNet sandbox**: three Canton participants, the registry as a decentralized party, the delegation granted by a 2-of-3 governance vote, the negative case refused by the ledger (`scripts/localnet.sh`). On the **shared HackCanton DevNet node**: the same flow against the live network, settling **real Canton Coin** through the CIP-56 token standard, evidence below (`scripts/devnet.sh`).
 
-### DevNet evidence, run of 24 Sep 2026
+### DevNet evidence, run of 25 Sep 2026, real Canton Coin
 
-Node `hackcanton-devnet-3`, packages `pledgeguard 0.2.0` and `pledgeguard-test 0.2.0` vetted, six parties under the namespace `64bf737a-`. Collateral fingerprint of this run: `500fbc479a202cb52446a0575f41f387a32e89fd669124a7ef9ae47c8d03eb79`.
+Node `hackcanton-devnet-3`, Ledger API 3.5.18, package `pledgeguard 0.3.0` vetted, six parties
+under the namespace `64bf737a-`. The draw leg is a **real CIP-56 allocation of Canton Coin**
+(`AmuletAllocation`), created by the lender through the Amulet registry's
+`AllocationFactory_Allocate` and executed by PledgeGuard's registry inside the collision check.
+Fingerprint of this run: `0020e22f1d7b5ec3ca5b0ccdb9ed0c1224638546b32eee4f38e3b9eedb36d32b`.
 
 | Offset | Update id | What happened |
 |---|---|---|
-| 1049806 | `1220482e1751a195...6b1a2c5` | `RegistryDelegation` granted to the automation party |
-| 1049859 | `12203b91cda795ce...d414412` | fingerprint registered, registry opens the `ClaimIndex` |
-| 1049913 | `12205509cee329b9...8f2655fd` | **lender A draws**: index occupied, `Claim` created, transfer executed, one transaction |
-| 1049937 | `12200ac0585d39a4...544513c1` | **lender B draws on the same hash**: no transfer, one `CollisionNotice` per lender |
-| 1049946 | `12206d03a6a87c4f...10a0762` | lender A repays, `Claim_Release`, the hash is free |
-| 1049970 | `12205454890ede8b...f5790ece` | lender B retries: settles |
+| 1168752 | `12204252f8d1d8db...a6458a4` | fingerprint registered, registry opens the `ClaimIndex` |
+| 1168794 | `12203923cfd38d57...2cfae06` | lender A allocates 120 CC, executor = the registry |
+| 1168810 | `12205c5d51c77d89...3ae1b44e` | **draw A settles**: index occupied, `Claim` created, the `AmuletAllocation` is executed. One transaction |
+| 1168836 | `12200a26ada73333...c184a914` | **draw B on the same fingerprint**: no transfer, one `CollisionNotice` per lender. B's allocation is untouched |
+| 1168842 | `122060d4fac2b510...148a29bd` | lender A repays, `Claim_Release`, the fingerprint is free |
+| 1168872 | `1220e5d5d49735d1...752d6374` | lender B retries and settles |
 
-Active contracts per party at offset 1049978, straight from each party's `/v2/state/active-contracts`:
+Balances before and after, read from the `Holding` interface: lender A 300 to 180 CC, the
+originator receives it. The collided draw moved nothing. Money only moves when the check passes.
+
+Active contracts per party, straight from each party's `/v2/state/active-contracts`:
 
 | Party | What it holds |
 |---|---|
@@ -58,8 +65,13 @@ This matrix is not a UI filter: it is what each party's participant returns from
 
 1. Originator creates `CollateralFingerprint` = `sha256` over the normalised identifying fields of the collateral schema (`receivables-pool-v1`: contract number, debtor, nominal, origination date), never over a PDF. The registry opens one `ClaimIndex` per hash.
 2. Lender and originator sign a bilateral `Facility` (propose / accept).
-3. The lender allocates the stablecoin leg (token standard `Allocation`, sender = lender, receiver = originator, executor = registry) and exercises `Facility_RequestDraw`.
-4. The registry exercises `DrawRequest_Settle`. Authority inside the choice is {lender, originator} (signatories) + {registry} (controller), exactly the three controllers of `Allocation_ExecuteTransfer`.
+3. The lender allocates the stablecoin leg through the instrument's own registry (for Canton Coin:
+   `AllocationFactory_Allocate` with the choice context the Amulet registry serves over HTTP),
+   sender = lender, receiver = originator, executor = the PledgeGuard registry. Then it exercises
+   `Facility_RequestDraw`. Any CIP-56 instrument works the same way: USDCx, USD1, a tokenised deposit.
+4. The registry exercises `DrawRequest_Settle`, passing the registry's execute-transfer choice
+   context and its disclosed contracts. Authority inside the choice is {lender, originator}
+   (signatories) + {registry} (controller), exactly the three controllers of `Allocation_ExecuteTransfer`.
    - Index free: `ClaimIndex_Occupy`, create `Claim`, execute the transfer. One transaction.
    - Index held: no transfer, one `CollisionNotice` per lender (neither learns who the other is), the auditor sees both. The transaction succeeds, so the evidence is on the ledger.
 5. On repayment the holder exercises `Claim_Release`; the hash is free again.

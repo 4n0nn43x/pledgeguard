@@ -28,7 +28,12 @@
 #   ./scripts/devnet.sh backend    # registry automation against DevNet
 #   ./scripts/devnet.sh scenario   # fingerprint, two facilities, draw, collision, release, retry
 #   ./scripts/devnet.sh acs        # per-party ACS, the privacy matrix, with the ledger offset
+#   ./scripts/devnet.sh fund <PARTY> <AMOUNT>   # send Amulet from the wallet party to a demo party
+#   ./scripts/devnet.sh holdings <PARTY>        # what Amulet that party holds
 #   ./scripts/devnet.sh txids      # collect update ids of this run, for the README
+#
+# AMULET=1 makes the draws real token-standard allocations of Canton Coin instead of the mock
+# (fund the two lenders first). The registry API is the public DevNet scan.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -40,6 +45,18 @@ JSON_API=${JSON_API:-https://ledger-api-json.participant.hackcanton-01.devnet.na
 OIDC=${OIDC:-https://keycloak.naas.noders.services/realms/noders-appsfactory/protocol/openid-connect/token}
 CLIENT_ID=${CLIENT_ID:-web-app-ui-hackcanton-01-devnet}
 TOKEN_CACHE=$HERE/.devnet.token
+REGISTRY_URL=${REGISTRY_URL:-https://scan.sv-1.dev.global.canton.network.digitalasset.com}
+AMULET=${AMULET:-}
+# Pin the app package this checkout built: older versions may still be vetted on the shared node.
+PKG_DAR=$HERE/../daml/pledgeguard/.daml/dist
+PACKAGE_PREFERENCE=${PACKAGE_PREFERENCE:-$(ls "$PKG_DAR"/pledgeguard-*.dar 2>/dev/null | sort -V | tail -1 | xargs -r -I{} sh -c 'unzip -p "{}" META-INF/MANIFEST.MF | tr -d "\r\n " | grep -o "pledgeguard-[0-9.]*-[0-9a-f]\{64\}" | head -1 | sed "s/.*-//"')}
+# Facility sizes. With AMULET=1 these are real Canton Coin, so keep them within what the lenders hold.
+DRAW_A_AMOUNT=${DRAW_A_AMOUNT:-${AMULET:+120.0}}; DRAW_A_AMOUNT=${DRAW_A_AMOUNT:-1000000.0}
+DRAW_B_AMOUNT=${DRAW_B_AMOUNT:-${AMULET:+90.0}}; DRAW_B_AMOUNT=${DRAW_B_AMOUNT:-750000.0}
+I_HOLDING='#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding'
+T_TFACTORY='#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory'
+T_TINSTR='#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferInstruction'
+T_AFACTORY='#splice-api-token-allocation-instruction-v1:Splice.Api.Token.AllocationInstructionV1:AllocationFactory'
 
 token() { # cached while valid; the password never leaves this machine
   if [ -s "$TOKEN_CACHE" ] && [ "$(( $(date +%s) - $(stat -c %Y "$TOKEN_CACHE") ))" -lt 240 ]; then
@@ -61,16 +78,70 @@ api() { # method path [json]
   curl -sS --fail-with-body -X "$1" "$JSON_API$2" \
     -H "Authorization: Bearer $(token)" -H 'Content-Type: application/json' ${3:+-d "$3"}
 }
-submit() { # actAs json-commands-array -> transaction
+submit() { # actAs json-commands-array [disclosed-contracts-json] -> transaction
   api POST /v2/commands/submit-and-wait-for-transaction "$(jq -n --arg p "$1" --argjson cmds "$2" \
+    --argjson disc "${3:-[]}" \
     --arg cid "pg-$(date +%s)-$RANDOM" --arg u "$(claim sub)" \
-    '{commands: {commands: $cmds, commandId: $cid, actAs: [$p], userId: $u},
+    --arg pref "$PACKAGE_PREFERENCE" \
+    '{commands: {commands: $cmds, commandId: $cid, actAs: [$p], userId: $u, disclosedContracts: $disc,
+                 packageIdSelectionPreference: (if $pref == "" then [] else [$pref] end)},
       transactionFormat: {transactionShape: "TRANSACTION_SHAPE_LEDGER_EFFECTS",
         eventFormat: {filtersByParty: {($p): {cumulative: [{identifierFilter: {WildcardFilter: {value: {includeCreatedEventBlob: false}}}}]}}, verbose: false}}}')"
 }
 created() { jq -r --arg t "$1" '.transaction.events[] | .CreatedEvent? // empty | select(.templateId | endswith($t)) | .contractId' | head -1; }
 create() { submit "$1" "$(jq -n --arg t "$2" --argjson a "$3" '[{CreateCommand: {templateId: $t, createArguments: $a}}]')"; }
-exercise() { submit "$1" "$(jq -n --arg t "$2" --arg c "$3" --arg ch "$4" --argjson a "$5" '[{ExerciseCommand: {templateId: $t, contractId: $c, choice: $ch, choiceArgument: $a}}]')"; }
+exercise() { submit "$1" "$(jq -n --arg t "$2" --arg c "$3" --arg ch "$4" --argjson a "$5" '[{ExerciseCommand: {templateId: $t, contractId: $c, choice: $ch, choiceArgument: $a}}]')" "${6:-[]}"; }
+
+# ---- Amulet, through the token standard. The registry serves the choice context and the
+# reference contracts (AmuletRules, open rounds) that every choice needs; we pass them as
+# disclosed contracts. Same interfaces any CIP-56 instrument implements.
+WALLET=${WALLET:-}
+wallet_party() { [ -n "$WALLET" ] || WALLET="$(claim sub)::${REGISTRY#*::}"; echo "$WALLET"; }
+dso() { curl -sS "$REGISTRY_URL/registry/metadata/v1/info" | jq -r .adminId; }
+reg_post() { curl -sS --fail-with-body -X POST "$REGISTRY_URL$1" -H 'content-type: application/json' -d "${2:-{\}}"; }
+holdings_of() { # party -> [contractId]
+  local off; off=$(api GET /v2/state/ledger-end | jq '.offset')
+  api POST /v2/state/active-contracts "$(jq -n --arg p "$1" --argjson o "$off" --arg i "$I_HOLDING" \
+    '{activeAtOffset: $o, verbose: false, eventFormat: {filtersByParty: {($p): {cumulative: [{identifierFilter: {InterfaceFilter: {value: {interfaceId: $i, includeInterfaceView: true, includeCreatedEventBlob: false}}}}]}}, verbose: false}}')" \
+    | jq '[.[] | .contractEntry.JsActiveContract.createdEvent | {cid: .contractId, amount: (.interfaceViews[0].viewValue.amount | tonumber), locked: (.interfaceViews[0].viewValue.lock != null)} | select(.locked | not)]'
+}
+holdings_() { holdings_of "$1" | jq -r '.[] | "\(.amount)  \(.cid)"'; echo "total: $(holdings_of "$1" | jq '[.[].amount] | add // 0')"; }
+
+fund_() { # party amount: token-standard transfer from the wallet party, accept if it stays pending
+  local to=$1 amount=$2 from now later hs args factory ctx disc out instr
+  from=$(wallet_party); now=$(date -u +%Y-%m-%dT%H:%M:%SZ); later=$(date -u -d '+24 hours' +%Y-%m-%dT%H:%M:%SZ)
+  hs=$(holdings_of "$from" | jq '[.[].cid]')
+  args=$(jq -n --arg a "$(dso)" --arg s "$from" --arg r "$to" --arg amt "$amount" --arg now "$now" --arg later "$later" --argjson hs "$hs" \
+    '{expectedAdmin: $a, transfer: {sender: $s, receiver: $r, amount: $amt, instrumentId: {admin: $a, id: "Amulet"}, requestedAt: $now, executeBefore: $later, inputHoldingCids: $hs, meta: {values: {}}}, extraArgs: {context: {values: {}}, meta: {values: {}}}}')
+  factory=$(reg_post /registry/transfer-instruction/v1/transfer-factory "$(jq -n --argjson c "$args" '{choiceArguments: $c}')")
+  ctx=$(jq -c '.choiceContext.choiceContextData' <<<"$factory")
+  disc=$(jq -c '[.choiceContext.disclosedContracts[] | {templateId, contractId, createdEventBlob, synchronizerId}]' <<<"$factory")
+  out=$(exercise "$from" "$T_TFACTORY" "$(jq -r .factoryId <<<"$factory")" TransferFactory_Transfer \
+    "$(jq -n --argjson a "$args" --argjson ctx "$ctx" '$a * {extraArgs: {context: $ctx, meta: {values: {}}}}')" "$disc")
+  instr=$(jq -r '[.transaction.events[] | .CreatedEvent? // empty | select(.templateId | contains("TransferInstruction") or contains("AmuletTransferInstruction")) | .contractId] | first // empty' <<<"$out")
+  if [ -n "$instr" ]; then
+    echo "   transfer pending, $to accepts instruction $instr"
+    ctx=$(reg_post "/registry/transfer-instruction/v1/$instr/choice-contexts/accept")
+    exercise "$to" "$T_TINSTR" "$instr" TransferInstruction_Accept \
+      "$(jq -n --argjson c "$(jq -c .choiceContextData <<<"$ctx")" '{extraArgs: {context: $c, meta: {values: {}}}}')" \
+      "$(jq -c '[.disclosedContracts[] | {templateId, contractId, createdEventBlob, synchronizerId}]' <<<"$ctx")" >/dev/null
+  fi
+  echo "   $to now holds $(holdings_of "$to" | jq '[.[].amount] | add // 0') Amulet"
+}
+
+allocate() { # lender amount settlement-ref -> allocation cid (real Amulet allocation)
+  local now later hs args factory ctx disc out
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ); later=$(date -u -d '+24 hours' +%Y-%m-%dT%H:%M:%SZ)
+  hs=$(holdings_of "$1" | jq '[.[].cid]')
+  args=$(jq -n --arg a "$(dso)" --arg s "$1" --arg r "$ORIGINATOR" --arg e "$REGISTRY" --arg amt "$2" --arg ref "$3" --arg now "$now" --arg later "$later" --argjson hs "$hs" \
+    '{expectedAdmin: $a, allocation: {settlement: {executor: $e, settlementRef: {id: $ref, cid: null}, requestedAt: $now, allocateBefore: $later, settleBefore: $later, meta: {values: {}}}, transferLegId: "draw", transferLeg: {sender: $s, receiver: $r, amount: $amt, instrumentId: {admin: $a, id: "Amulet"}, meta: {values: {}}}}, requestedAt: $now, inputHoldingCids: $hs, extraArgs: {context: {values: {}}, meta: {values: {}}}}')
+  factory=$(reg_post /registry/allocation-instruction/v1/allocation-factory "$(jq -n --argjson c "$args" '{choiceArguments: $c}')")
+  ctx=$(jq -c '.choiceContext.choiceContextData' <<<"$factory")
+  disc=$(jq -c '[.choiceContext.disclosedContracts[] | {templateId, contractId, createdEventBlob, synchronizerId}]' <<<"$factory")
+  out=$(exercise "$1" "$T_AFACTORY" "$(jq -r .factoryId <<<"$factory")" AllocationFactory_Allocate \
+    "$(jq -n --argjson a "$args" --argjson ctx "$ctx" '$a * {extraArgs: {context: $ctx, meta: {values: {}}}}')" "$disc")
+  jq -r '[.transaction.events[] | .CreatedEvent? // empty | select(.templateId | contains("AmuletAllocation") or endswith(":Allocation")) | .contractId] | first // empty' <<<"$out"
+}
 
 T_FP='#pledgeguard:PledgeGuard.Registry:CollateralFingerprint'
 T_PROP='#pledgeguard:PledgeGuard.Lending:FacilityProposal'
@@ -78,6 +149,7 @@ T_FAC='#pledgeguard:PledgeGuard.Lending:Facility'
 T_CLAIM='#pledgeguard:PledgeGuard.Registry:Claim'
 T_DELEG='#pledgeguard:PledgeGuard.Delegation:RegistryDelegation'
 T_MOCK='#pledgeguard-test:PledgeGuard.Test.Scenario:MockAllocation'
+T_DRAWREQ='#pledgeguard:PledgeGuard.Lending:DrawRequest'
 SCHEMA=receivables-pool-v1
 HASH=${HASH:-$(printf 'receivables-pool-v1|contract=RP-2026-0917|debtor=Acme Auto Finance|nominal=1250000|origination=2026-09-01|run=%s' "$(date +%s)" | sha256sum | cut -c1-64)}
 
@@ -95,7 +167,8 @@ delegate_() { # on DevNet the registry is a plain party we act as, so this is a 
 
 backend_() {
   LEDGER_URL=$JSON_API TOKEN=$(token) USER_ID=$(claim sub) OPS_PARTY=$OPS REGISTRY_PARTY=$REGISTRY \
-    AUDITOR_PARTY=$AUDITOR STATE_FILE=$HERE/.devnet-registry-state.json exec node "$HERE/../backend/registry.mjs"
+    AUDITOR_PARTY=$AUDITOR TOKEN_REGISTRY_URL=${AMULET:+$REGISTRY_URL} \
+    STATE_FILE=$HERE/.devnet-registry-state.json exec node "$HERE/../backend/registry.mjs"
 }
 
 facility() { # lender amount rate -> facility cid
@@ -106,7 +179,12 @@ facility() { # lender amount rate -> facility cid
 }
 draw() { # lender facility amount -> draw request cid
   local alloc
-  alloc=$(create "$1" "$T_MOCK" "$(jq -n --arg e "$REGISTRY" --arg s "$1" --arg r "$ORIGINATOR" --arg a "$3" '{executor: $e, sender: $s, receiver: $r, amount: $a}')" | created MockAllocation)
+  if [ -n "$AMULET" ]; then
+    alloc=$(allocate "$1" "$3" "$HASH")
+    [ -n "$alloc" ] || { echo "allocation failed for $1" >&2; return 1; }
+  else
+    alloc=$(create "$1" "$T_MOCK" "$(jq -n --arg e "$REGISTRY" --arg s "$1" --arg r "$ORIGINATOR" --arg a "$3" '{executor: $e, sender: $s, receiver: $r, amount: $a}')" | created MockAllocation)
+  fi
   exercise "$1" "$T_FAC" "$2" Facility_RequestDraw "$(jq -n --arg c "$alloc" '{allocationCid: $c}')" | created DrawRequest
 }
 wait_settled() { # party draw-cid
@@ -123,18 +201,18 @@ scenario_() {
   create "$ORIGINATOR" "$T_FP" "$(jq -n --arg o "$ORIGINATOR" --arg r "$REGISTRY" --arg s "$SCHEMA" --arg h "$HASH" '{originator: $o, registry: $r, schemaId: $s, hash: $h}')" | created CollateralFingerprint
   sleep 4
   echo "2. two bilateral facilities on the same hash"
-  FAC_A=$(facility "$LENDER_A" 1000000.0 0.085); echo "   facility A $FAC_A"
-  FAC_B=$(facility "$LENDER_B" 750000.0 0.091);  echo "   facility B $FAC_B"
+  FAC_A=$(facility "$LENDER_A" "$DRAW_A_AMOUNT" 0.085); echo "   facility A $FAC_A"
+  FAC_B=$(facility "$LENDER_B" "$DRAW_B_AMOUNT" 0.091);  echo "   facility B $FAC_B"
   echo "3. lender A draws"
-  DRAW_A=$(draw "$LENDER_A" "$FAC_A" 1000000.0); wait_settled "$LENDER_A" "$DRAW_A"
+  DRAW_A=$(draw "$LENDER_A" "$FAC_A" "$DRAW_A_AMOUNT"); wait_settled "$LENDER_A" "$DRAW_A"
   echo "4. lender B draws on the same hash: collision"
-  DRAW_B=$(draw "$LENDER_B" "$FAC_B" 750000.0); wait_settled "$LENDER_B" "$DRAW_B"
+  DRAW_B=$(draw "$LENDER_B" "$FAC_B" "$DRAW_B_AMOUNT"); wait_settled "$LENDER_B" "$DRAW_B"
   echo "5. lender A repays and releases"
   CLAIM_A=$(acs_of "$LENDER_A" | jq -r --arg h "$HASH" '.[] | select((.templateId | endswith(":Claim")) and .createArgument.hash == $h) | .contractId' | head -1)
   exercise "$LENDER_A" "$T_CLAIM" "$CLAIM_A" Claim_Release '{}' >/dev/null
   sleep 3
   echo "6. lender B retries: settles"
-  DRAW_B2=$(draw "$LENDER_B" "$FAC_B" 750000.0); wait_settled "$LENDER_B" "$DRAW_B2"
+  DRAW_B2=$(draw "$LENDER_B" "$FAC_B" "$DRAW_B_AMOUNT"); wait_settled "$LENDER_B" "$DRAW_B2"
   HASH_FILTER=$HASH acs_
 }
 
@@ -162,5 +240,6 @@ txids_() { # every update this user's parties saw, newest last: for the README e
 case "${1-}" in
   whoami) whoami_ ;; parties) parties_ ;; delegate) delegate_ ;; backend) backend_ ;;
   scenario) scenario_ ;; acs) acs_ ;; txids) txids_ ;;
+  token) token ;; fund) fund_ "$2" "$3" ;; holdings) holdings_ "$2" ;; wallet) wallet_party ;;
   *) sed -n 2,30p "$0"; exit 1 ;;
 esac

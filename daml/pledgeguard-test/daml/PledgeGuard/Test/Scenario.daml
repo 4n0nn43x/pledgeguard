@@ -92,8 +92,11 @@ scenario = do
   -- On LocalNet this create runs through DecMan governance (GrantDelegationProposal).
   -- ops submits with readAs registry (its ledger user has CanReadAs on the registry).
   deleg <- submit registry do createCmd RegistryDelegation with registry, ops
-  let settle drawCid indexCid = asOps ops registry do
-        exerciseCmd deleg Delegation_Settle with drawCid, indexCid, auditor
+  -- The mock allocation ignores the choice context; against Amulet the registry automation
+  -- fills it from the registry's execute-transfer endpoint.
+  let noContext = None  -- the mock allocation needs no registry context
+      settle drawCid indexCid = asOps ops registry do
+        exerciseCmd deleg Delegation_Settle with drawCid, indexCid, auditor, extraArgs = noContext
 
   -- 1. Fingerprint registered, ops opens the per-hash index on the registry's behalf.
   fp <- submit originator do
@@ -160,7 +163,7 @@ scenario = do
   idxY <- asOps ops registry do exerciseCmd deleg Delegation_Index with fingerprintCid = fpY
   reqB2 <- submit lenderB do
     exerciseCmd facB Facility_RequestDraw with allocationCid = toInterfaceContractId allocB
-  asOpsMustFail ops registry do exerciseCmd deleg Delegation_Settle with drawCid = reqB2, indexCid = idxY, auditor
+  asOpsMustFail ops registry do exerciseCmd deleg Delegation_Settle with drawCid = reqB2, indexCid = idxY, auditor, extraArgs = noContext
 
   -- 6. A repays and releases; B's retry now settles.
   idx2 <- submit lenderA do exerciseCmd claimA Claim_Release
@@ -175,7 +178,7 @@ scenario = do
   submit registry do exerciseCmd deleg Delegation_Revoke
   reqB3 <- submit lenderB do
     exerciseCmd facB Facility_RequestDraw with allocationCid = toInterfaceContractId allocB
-  asOpsMustFail ops registry do exerciseCmd deleg Delegation_Settle with drawCid = reqB3, indexCid = idx2, auditor
+  asOpsMustFail ops registry do exerciseCmd deleg Delegation_Settle with drawCid = reqB3, indexCid = idx2, auditor, extraArgs = noContext
   -- ops never had the registry's authority of its own
-  asOpsMustFail ops registry do exerciseCmd reqB3 DrawRequest_Settle with indexCid = idx2, auditor
+  asOpsMustFail ops registry do exerciseCmd reqB3 DrawRequest_Settle with indexCid = idx2, auditor, extraArgs = noContext
   pure ()

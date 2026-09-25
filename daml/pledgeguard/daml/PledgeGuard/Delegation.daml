@@ -6,6 +6,7 @@
 -- choices below still enforce every check. Revocation and force-release stay governed.
 module PledgeGuard.Delegation where
 
+import Splice.Api.Token.MetadataV1 (ExtraArgs)
 import PledgeGuard.Lending
 import PledgeGuard.Registry
 
@@ -27,8 +28,9 @@ template RegistryDelegation
         drawCid : ContractId DrawRequest
         indexCid : ContractId ClaimIndex
         auditor : Party
+        extraArgs : Optional ExtraArgs
       controller ops
-      do exercise drawCid DrawRequest_Settle with indexCid, auditor
+      do exercise drawCid DrawRequest_Settle with indexCid, auditor, extraArgs
 
     choice Delegation_Revoke : ()
       controller registry

@@ -28,12 +28,13 @@
 #   ./scripts/devnet.sh backend    # registry automation against DevNet
 #   ./scripts/devnet.sh scenario   # fingerprint, two facilities, draw, collision, release, retry
 #   ./scripts/devnet.sh acs        # per-party ACS, the privacy matrix, with the ledger offset
-#   ./scripts/devnet.sh fund <PARTY> <AMOUNT>   # send Amulet from the wallet party to a demo party
-#   ./scripts/devnet.sh holdings <PARTY>        # what Amulet that party holds
+#   ./scripts/devnet.sh fund <PARTY> <AMOUNT>   # send the instrument from the wallet party to a demo party
+#   ./scripts/devnet.sh holdings <PARTY>        # what that party holds of the instrument
 #   ./scripts/devnet.sh txids      # collect update ids of this run, for the README
 #
 # AMULET=1 makes the draws real token-standard allocations of Canton Coin instead of the mock
-# (fund the two lenders first). The registry API is the public DevNet scan.
+# (fund the two lenders first). CBTC=1 does the same with cBTC, BitSafe's asset, whose own
+# instrument admin is a Decentralized Party. Nothing in the Daml changes between the two.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -45,8 +46,22 @@ JSON_API=${JSON_API:-https://ledger-api-json.participant.hackcanton-01.devnet.na
 OIDC=${OIDC:-https://keycloak.naas.noders.services/realms/noders-appsfactory/protocol/openid-connect/token}
 CLIENT_ID=${CLIENT_ID:-web-app-ui-hackcanton-01-devnet}
 TOKEN_CACHE=$HERE/.devnet.token
-REGISTRY_URL=${REGISTRY_URL:-https://scan.sv-1.dev.global.canton.network.digitalasset.com}
+# The instrument the draw settles in. Any CIP-56 registry works; two are wired here.
+#   AMULET=1  Canton Coin, registry = the public DevNet scan
+#   CBTC=1    cBTC (BitSafe), registry = the DA utility registrar for the cbtc-network party,
+#             which is itself a Decentralized Party. Faucet: https://cbtc-faucet.bitsafe.finance/
 AMULET=${AMULET:-}
+CBTC=${CBTC:-}
+CBTC_ADMIN=${CBTC_ADMIN:-cbtc-network::12202a83c6f4082217c175e29bc53da5f2703ba2675778ab99217a5a881a949203ff}
+if [ -n "$CBTC" ]; then
+  AMULET=1
+  REGISTRY_URL=${REGISTRY_URL:-https://api.utilities.digitalasset-dev.com/api/token-standard/v0/registrars/$CBTC_ADMIN}
+  INSTRUMENT_ADMIN=${INSTRUMENT_ADMIN:-$CBTC_ADMIN}
+  INSTRUMENT_ID=${INSTRUMENT_ID:-CBTC}
+else
+  REGISTRY_URL=${REGISTRY_URL:-https://scan.sv-1.dev.global.canton.network.digitalasset.com}
+  INSTRUMENT_ID=${INSTRUMENT_ID:-Amulet}
+fi
 # Pin the app package this checkout built: older versions may still be vetted on the shared node.
 PKG_DAR=$HERE/../daml/pledgeguard/.daml/dist
 PACKAGE_PREFERENCE=${PACKAGE_PREFERENCE:-$(ls "$PKG_DAR"/pledgeguard-*.dar 2>/dev/null | sort -V | tail -1 | xargs -r -I{} sh -c 'unzip -p "{}" META-INF/MANIFEST.MF | tr -d "\r\n " | grep -o "pledgeguard-[0-9.]*-[0-9a-f]\{64\}" | head -1 | sed "s/.*-//"')}
@@ -97,13 +112,14 @@ exercise() { submit "$1" "$(jq -n --arg t "$2" --arg c "$3" --arg ch "$4" --argj
 # disclosed contracts. Same interfaces any CIP-56 instrument implements.
 WALLET=${WALLET:-}
 wallet_party() { [ -n "$WALLET" ] || WALLET="$(claim sub)::${REGISTRY#*::}"; echo "$WALLET"; }
-dso() { curl -sS "$REGISTRY_URL/registry/metadata/v1/info" | jq -r .adminId; }
+# The instrument admin: given for cBTC, read from the registry for Canton Coin.
+dso() { [ -n "${INSTRUMENT_ADMIN-}" ] || INSTRUMENT_ADMIN=$(curl -sS "$REGISTRY_URL/registry/metadata/v1/info" | jq -r .adminId); echo "$INSTRUMENT_ADMIN"; }
 reg_post() { curl -sS --fail-with-body -X POST "$REGISTRY_URL$1" -H 'content-type: application/json' -d "${2:-{\}}"; }
 holdings_of() { # party -> [contractId]
   local off; off=$(api GET /v2/state/ledger-end | jq '.offset')
   api POST /v2/state/active-contracts "$(jq -n --arg p "$1" --argjson o "$off" --arg i "$I_HOLDING" \
     '{activeAtOffset: $o, verbose: false, eventFormat: {filtersByParty: {($p): {cumulative: [{identifierFilter: {InterfaceFilter: {value: {interfaceId: $i, includeInterfaceView: true, includeCreatedEventBlob: false}}}}]}}, verbose: false}}')" \
-    | jq '[.[] | .contractEntry.JsActiveContract.createdEvent | {cid: .contractId, amount: (.interfaceViews[0].viewValue.amount | tonumber), locked: (.interfaceViews[0].viewValue.lock != null)} | select(.locked | not)]'
+    | jq --arg iid "$INSTRUMENT_ID" '[.[] | .contractEntry.JsActiveContract.createdEvent | {cid: .contractId, amount: (.interfaceViews[0].viewValue.amount | tonumber), id: .interfaceViews[0].viewValue.instrumentId.id, locked: (.interfaceViews[0].viewValue.lock != null)} | select((.locked | not) and .id == $iid)]'
 }
 holdings_() { holdings_of "$1" | jq -r '.[] | "\(.amount)  \(.cid)"'; echo "total: $(holdings_of "$1" | jq '[.[].amount] | add // 0')"; }
 
@@ -112,7 +128,7 @@ fund_() { # party amount: token-standard transfer from the wallet party, accept 
   from=$(wallet_party); now=$(date -u +%Y-%m-%dT%H:%M:%SZ); later=$(date -u -d '+24 hours' +%Y-%m-%dT%H:%M:%SZ)
   hs=$(holdings_of "$from" | jq '[.[].cid]')
   args=$(jq -n --arg a "$(dso)" --arg s "$from" --arg r "$to" --arg amt "$amount" --arg now "$now" --arg later "$later" --argjson hs "$hs" \
-    '{expectedAdmin: $a, transfer: {sender: $s, receiver: $r, amount: $amt, instrumentId: {admin: $a, id: "Amulet"}, requestedAt: $now, executeBefore: $later, inputHoldingCids: $hs, meta: {values: {}}}, extraArgs: {context: {values: {}}, meta: {values: {}}}}')
+    --arg iid "$INSTRUMENT_ID" '{expectedAdmin: $a, transfer: {sender: $s, receiver: $r, amount: $amt, instrumentId: {admin: $a, id: $iid}, requestedAt: $now, executeBefore: $later, inputHoldingCids: $hs, meta: {values: {}}}, extraArgs: {context: {values: {}}, meta: {values: {}}}}')
   factory=$(reg_post /registry/transfer-instruction/v1/transfer-factory "$(jq -n --argjson c "$args" '{choiceArguments: $c}')")
   ctx=$(jq -c '.choiceContext.choiceContextData' <<<"$factory")
   disc=$(jq -c '[.choiceContext.disclosedContracts[] | {templateId, contractId, createdEventBlob, synchronizerId}]' <<<"$factory")
@@ -133,8 +149,8 @@ allocate() { # lender amount settlement-ref -> allocation cid (real Amulet alloc
   local now later hs args factory ctx disc out
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ); later=$(date -u -d '+24 hours' +%Y-%m-%dT%H:%M:%SZ)
   hs=$(holdings_of "$1" | jq '[.[].cid]')
-  args=$(jq -n --arg a "$(dso)" --arg s "$1" --arg r "$ORIGINATOR" --arg e "$REGISTRY" --arg amt "$2" --arg ref "$3" --arg now "$now" --arg later "$later" --argjson hs "$hs" \
-    '{expectedAdmin: $a, allocation: {settlement: {executor: $e, settlementRef: {id: $ref, cid: null}, requestedAt: $now, allocateBefore: $later, settleBefore: $later, meta: {values: {}}}, transferLegId: "draw", transferLeg: {sender: $s, receiver: $r, amount: $amt, instrumentId: {admin: $a, id: "Amulet"}, meta: {values: {}}}}, requestedAt: $now, inputHoldingCids: $hs, extraArgs: {context: {values: {}}, meta: {values: {}}}}')
+  args=$(jq -n --arg a "$(dso)" --arg iid "$INSTRUMENT_ID" --arg s "$1" --arg r "$ORIGINATOR" --arg e "$REGISTRY" --arg amt "$2" --arg ref "$3" --arg now "$now" --arg later "$later" --argjson hs "$hs" \
+    '{expectedAdmin: $a, allocation: {settlement: {executor: $e, settlementRef: {id: $ref, cid: null}, requestedAt: $now, allocateBefore: $later, settleBefore: $later, meta: {values: {}}}, transferLegId: "draw", transferLeg: {sender: $s, receiver: $r, amount: $amt, instrumentId: {admin: $a, id: $iid}, meta: {values: {}}}}, requestedAt: $now, inputHoldingCids: $hs, extraArgs: {context: {values: {}}, meta: {values: {}}}}')
   factory=$(reg_post /registry/allocation-instruction/v1/allocation-factory "$(jq -n --argjson c "$args" '{choiceArguments: $c}')")
   ctx=$(jq -c '.choiceContext.choiceContextData' <<<"$factory")
   disc=$(jq -c '[.choiceContext.disclosedContracts[] | {templateId, contractId, createdEventBlob, synchronizerId}]' <<<"$factory")

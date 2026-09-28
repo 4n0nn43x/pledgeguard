@@ -2,54 +2,260 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PledgeGuard</title>
+<title>PledgeGuard, live party views</title>
 <link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="pledgeguard.css">
 <style>
-  :root {
-    --navy: #0f2a4a; --teal: #2a9d8f; --bg: #0b1017; --panel: #121a24; --line: #1e2a38;
-    --text: #e6edf3; --dim: #8496a8; --red: #e5484d;
+  body { display: grid; grid-template-columns: 216px 1fr; min-height: 100vh; }
+  @media (max-width: 900px) { body { grid-template-columns: 1fr; } aside { display: none; } }
+
+  aside {
+    border-right: 1px solid var(--line); background: #0a0b0e;
+    display: flex; flex-direction: column; padding: 16px 0; position: sticky; top: 0; height: 100vh;
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 15px/1.45 "Inter", "Manrope", system-ui, sans-serif; }
-  header { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  header img { height: 30px; }
-  header .sub { color: var(--dim); font-size: 13px; }
-  header .right { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--dim); }
-  select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 13px; }
-  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; padding: 16px 20px; align-items: start; }
-  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-height: 260px; overflow: hidden; }
-  .col > h2 { margin: 0; padding: 12px 14px; font-size: 15px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .col > h2 small { color: var(--dim); font-weight: 400; font-size: 12px; text-align: right; }
-  .col.registry > h2 { border-bottom-color: var(--teal); }
-  .body { padding: 10px 14px 14px; }
-  .c { border-left: 3px solid var(--line); padding: 8px 10px; margin: 9px 0; background: #0e151e; border-radius: 0 6px 6px 0; }
-  .c .t { font-weight: 600; font-size: 13px; letter-spacing: .01em; }
-  .c dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; font-size: 12.5px; }
+  aside .brand { display: flex; align-items: center; gap: 9px; padding: 4px 18px 22px; font-weight: 500; letter-spacing: -0.02em; }
+  aside .group { padding: 14px 18px 6px; }
+  aside a.nav {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 7px 18px; font-size: 13.5px; color: var(--muted); border-left: 2px solid transparent;
+  }
+  aside a.nav:hover { color: var(--text); background: rgba(255, 255, 255, 0.03); }
+  aside a.nav[aria-current="true"] { color: var(--text); border-left-color: var(--accent); background: rgba(255, 255, 255, 0.04); }
+  aside a.nav .c { font: 500 11px/1 var(--mono); color: var(--dim); }
+  aside .foot { margin-top: auto; padding: 16px 18px 0; border-top: 1px solid var(--line); }
+
+  main { min-width: 0; }
+  .topbar {
+    position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 0 var(--gut); height: 58px; border-bottom: 1px solid var(--line);
+    background: rgba(8, 9, 11, 0.86); backdrop-filter: blur(14px);
+  }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .topbar select {
+    background: var(--surface); color: var(--text); border: 1px solid var(--line);
+    border-radius: var(--r); padding: 6px 10px; font: 500 12.5px var(--sans);
+  }
+  .page { padding: clamp(20px, 3vw, 34px) var(--gut) 64px; }
+  .page > * + * { margin-top: 18px; }
+  .pagehead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  /* the party columns, the heart of the demo */
+  .views { display: grid; grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); gap: 12px; align-items: start; }
+  .view { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  .view > header {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  .view > header .who { font-weight: 500; letter-spacing: -0.015em; }
+  .view > header .role { display: block; margin-top: 3px; font: 400 11px/15px var(--mono); color: var(--dim); }
+  .view.registry { border-color: rgba(201, 185, 138, 0.28); }
+  .view .list { padding: 10px 14px 14px; }
+  .view .empty { padding: 30px 14px; text-align: center; color: var(--dim); font-size: 13px; }
+
+  .c {
+    border-left: 2px solid var(--line-strong); padding: 9px 11px; margin-top: 9px;
+    background: #0d1014; border-radius: 0 3px 3px 0;
+  }
+  .c .t { font: 500 12px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+  .c dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0 0; font: 400 12px/17px var(--mono); }
   .c dt { color: var(--dim); }
   .c dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-  .Facility { border-left-color: #3b82f6; }
-  .Claim, .ClaimIndex { border-left-color: var(--teal); }
-  .CollateralFingerprint, .RegistryDelegation { border-left-color: #64748b; }
-  .CollisionNotice { border-left-color: var(--red); background: #1e1013; }
-  .CollisionNotice .t::before { content: "⚠ "; }
-  .empty { color: var(--dim); font-style: italic; padding: 24px 0; text-align: center; font-size: 13px; }
-  code.mono { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 12px; color: var(--dim); }
-  .err { color: var(--red); font-size: 12px; }
+  .c.Facility { border-left-color: var(--blue); }
+  .c.Claim, .c.ClaimIndex { border-left-color: var(--green); }
+  .c.CollateralFingerprint, .c.RegistryDelegation, .c.DrawRequest { border-left-color: #4a505c; }
+  .c.CollisionNotice { border-left-color: var(--red); background: #17100f; }
+  .c.CollisionNotice .t { color: var(--red); }
+  .c.AmuletAllocation, .c.MockAllocation { border-left-color: var(--accent); }
+  .new { animation: flash 1.6s ease; }
+  @keyframes flash { from { background: rgba(201, 185, 138, 0.14); } }
+
+  .err { color: var(--red); font-size: 12.5px; padding: 14px; }
+  .banner {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    border: 1px solid rgba(229, 72, 77, 0.35); background: #17100f; border-radius: var(--r);
+  }
+  .hidden { display: none; }
 </style>
 
-<header>
-  <img src="logo-dark.svg" alt="PledgeGuard" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'PledgeGuard'}))">
-  <span class="sub">what each party's own participant returns from <code class="mono">/v2/state/active-contracts</code>. No UI filtering.</span>
-  <span class="right">
-    <label>VIEWING AS <select id="viewAs"></select></label>
-    <span id="offset"></span>
-  </span>
-</header>
-<div class="cols" id="cols"></div>
+<aside>
+  <a class="brand" href="/">
+    <svg width="20" height="20" viewBox="0 0 64 64" aria-hidden="true">
+      <rect x="8" y="8" width="36" height="36" rx="10" fill="none" stroke="#f5f3ea" stroke-width="4"/>
+      <rect x="20" y="20" width="36" height="36" rx="10" fill="none" stroke="#f5f3ea" stroke-width="4"/>
+    </svg>
+    PledgeGuard
+  </a>
+
+  <div class="group eyebrow">Ledger</div>
+  <a class="nav" href="#" data-tab="views" aria-current="true">Party views <span class="c" id="n-views"></span></a>
+  <a class="nav" href="#" data-tab="collisions">Collisions <span class="c" id="n-coll"></span></a>
+  <a class="nav" href="#" data-tab="registry">Registry <span class="c" id="n-reg"></span></a>
+
+  <div class="group eyebrow">Trust</div>
+  <a class="nav" href="#" data-tab="governance">Governance</a>
+  <a class="nav" href="#" data-tab="proof">Proof</a>
+
+  <div class="foot">
+    <p class="eyebrow" style="margin:0 0 8px">Network</p>
+    <p class="mono small" style="margin:0"><span class="dot live"></span> <span id="net">connecting</span></p>
+    <p class="eyebrow" style="margin:14px 0 6px">Offset</p>
+    <p class="mono small num" style="margin:0" id="offset">–</p>
+  </div>
+</aside>
+
+<main>
+  <div class="topbar">
+    <span class="eyebrow">Active contracts, straight from each party's participant</span>
+    <span class="right">
+      <label class="eyebrow" style="display:flex;align-items:center;gap:8px">Viewing as
+        <select id="viewAs"></select>
+      </label>
+      <label class="eyebrow" style="display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="auto" checked> live
+      </label>
+    </span>
+  </div>
+
+  <!-- party views -->
+  <div class="page" data-page="views">
+    <div class="pagehead">
+      <div>
+        <h1 class="h2" style="font-size:26px">Same truth, different views</h1>
+        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">
+          Each column is one <span class="mono">/v2/state/active-contracts</span> call for that
+          party. Nothing is filtered in this page: a party that is not a stakeholder never
+          receives the contract.
+        </p>
+      </div>
+    </div>
+    <div class="banner hidden" id="collision-banner">
+      <span class="dot red"></span>
+      <div>
+        <div style="font-weight:500">Collision on the ledger</div>
+        <div class="small body-muted" id="collision-detail"></div>
+      </div>
+    </div>
+    <div class="views" id="cols"></div>
+  </div>
+
+  <!-- collisions -->
+  <div class="page hidden" data-page="collisions">
+    <div class="pagehead">
+      <div>
+        <h1 class="h2" style="font-size:26px">Collisions</h1>
+        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">
+          A collision means a fingerprint already carried a live claim. No transfer happened and
+          each lender received its own notice. Neither learns who the other is.
+        </p>
+      </div>
+    </div>
+    <div class="card flush">
+      <div class="card-head"><span class="eyebrow">Notices visible to the auditor</span><span class="tag" id="coll-count">0</span></div>
+      <div id="coll-table"></div>
+    </div>
+    <div class="card">
+      <p class="eyebrow">What happened</p>
+      <p class="mono small" style="margin:12px 0 0;color:var(--muted);line-height:22px">
+        draw request<br>&nbsp;&nbsp;↓<br>fingerprint check<br>&nbsp;&nbsp;↓<br>existing claim found<br>&nbsp;&nbsp;↓<br>
+        <span style="color:var(--red)">settlement refused, 0 transferred</span><br>&nbsp;&nbsp;↓<br>one notice per lender, both visible to the auditor
+      </p>
+    </div>
+  </div>
+
+  <!-- registry -->
+  <div class="page hidden" data-page="registry">
+    <div class="pagehead">
+      <div>
+        <h1 class="h2" style="font-size:26px">Registry</h1>
+        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">
+          Everything the registry party holds. Fingerprints, one index per hash, claims without
+          terms, notices. No facility.
+        </p>
+      </div>
+    </div>
+    <div class="card flush">
+      <div class="card-head"><span class="eyebrow">Fingerprints and claims</span></div>
+      <div id="reg-table"></div>
+    </div>
+  </div>
+
+  <!-- governance -->
+  <div class="page hidden" data-page="governance">
+    <div class="pagehead">
+      <div>
+        <h1 class="h2" style="font-size:26px">A registry no institution controls</h1>
+        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">
+          The registry's identity is a Canton Decentralized Party. Two of three owner keys are
+          required for anything sensitive. Routine settlement runs under a delegation the members
+          granted once, by vote, and can revoke at any time.
+        </p>
+      </div>
+    </div>
+    <div class="grid cols-2">
+      <div class="card flush">
+        <div class="card-head"><span class="eyebrow">Automation, the ordinary</span><span class="tag ok" id="deleg-state">checking</span></div>
+        <table class="data">
+          <tr><td>Open the index for a fingerprint</td><td class="num" style="color:var(--green)">delegated</td></tr>
+          <tr><td>Check and settle a draw</td><td class="num" style="color:var(--green)">delegated</td></tr>
+          <tr><td>Anything else</td><td class="num body-muted">not delegated</td></tr>
+        </table>
+      </div>
+      <div class="card flush">
+        <div class="card-head"><span class="eyebrow">Governance, the exceptional</span><span class="tag hold">2 of 3</span></div>
+        <table class="data">
+          <tr><td>Grant the delegation</td><td class="num" style="color:var(--accent)">vote</td></tr>
+          <tr><td>Revoke the automation</td><td class="num" style="color:var(--accent)">vote</td></tr>
+          <tr><td>Force-release a fingerprint</td><td class="num" style="color:var(--accent)">vote</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <p class="eyebrow">Below the threshold, the ledger refuses</p>
+      <p class="mono small" style="margin:10px 0 0;color:var(--red)">DAML_FAILURE: The requirement 'Enough confirmations to execute action' was not met.</p>
+      <p class="small body-muted" style="margin:10px 0 0">One confirmation out of the two required. The threshold lives in the Daml GovernanceRules contract, not in any backend.</p>
+    </div>
+  </div>
+
+  <!-- proof -->
+  <div class="page hidden" data-page="proof">
+    <div class="pagehead">
+      <div>
+        <h1 class="h2" style="font-size:26px">Proof</h1>
+        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">What actually runs, and where.</p>
+      </div>
+    </div>
+    <div class="grid cols-4">
+      <div class="card stat"><div class="k">24</div><div class="l eyebrow">Scenario transactions</div></div>
+      <div class="card stat"><div class="k">6</div><div class="l eyebrow">Daml templates</div></div>
+      <div class="card stat"><div class="k">2 / 3</div><div class="l eyebrow">Registry threshold</div></div>
+      <div class="card stat"><div class="k" style="color:var(--red)">0</div><div class="l eyebrow">Colliding draws funded</div></div>
+    </div>
+    <div class="grid cols-2">
+      <div class="card flush">
+        <div class="card-head"><span class="eyebrow">LocalNet</span><span class="tag ok">verified</span></div>
+        <table class="data">
+          <tr><td>Three Canton participants</td><td class="num">yes</td></tr>
+          <tr><td>Registry as a decentralized party</td><td class="num">2 of 3</td></tr>
+          <tr><td>Governance vote executed</td><td class="num">yes</td></tr>
+          <tr><td>Below-threshold execution</td><td class="num" style="color:var(--red)">refused</td></tr>
+        </table>
+      </div>
+      <div class="card flush">
+        <div class="card-head"><span class="eyebrow">DevNet, shared HackCanton node</span><span class="tag ok">live</span></div>
+        <table class="data">
+          <tr><td>Ledger API</td><td class="num">3.5.18</td></tr>
+          <tr><td>Settled in Canton Coin</td><td class="num">yes</td></tr>
+          <tr><td>Settled in cBTC</td><td class="num">yes</td></tr>
+          <tr><td>Moved on a colliding draw</td><td class="num" style="color:var(--red)">0</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
 
 <script>
-const TEMPLATES = {
+// Field order per template: what a reader should see first, and nothing we do not hold.
+const FIELDS = {
   CollateralFingerprint: ["schemaId", "hash"],
   Facility: ["lender", "amount", "rate", "maturity", "hash"],
   FacilityProposal: ["lender", "amount", "rate"],
@@ -58,19 +264,22 @@ const TEMPLATES = {
   Claim: ["lender", "hash", "openedAt"],
   CollisionNotice: ["recipient", "hash", "at"],
   RegistryDelegation: ["ops"],
+  AmuletAllocation: ["amount"],
   MockAllocation: ["sender", "receiver", "amount"],
 };
-const short = (v) => typeof v === "string"
-  ? (v.includes("::") ? v.split("::")[0] : v.length > 24 ? v.slice(0, 10) + "…" + v.slice(-6) : v)
-  : v === null ? "—" : String(v);
+const short = (v) =>
+  typeof v !== "string" ? (v === null ? "—" : String(v))
+  : v.includes("::") ? v.split("::")[0].replace(/^[0-9a-f]{8}-/, "")
+  : /^[0-9a-f]{40,}$/.test(v) ? v.slice(0, 8) + "…" + v.slice(-4)
+  : v.length > 26 ? v.slice(0, 22) + "…" : v;
 
-let parties = [], selected = "";
+let parties = [], selected = "", seen = new Set(), first = true;
 
-async function post(path, body) {
-  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error((await r.text()).slice(0, 180));
+const post = async (p, b) => {
+  const r = await fetch(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
+  if (!r.ok) throw new Error((await r.text()).slice(0, 160));
   return r.json();
-}
+};
 
 async function acs(party, offset) {
   const rows = await post("/api/v2/state/active-contracts", {
@@ -78,40 +287,93 @@ async function acs(party, offset) {
     eventFormat: { filtersByParty: { [party]: { cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } }] } }, verbose: false },
   });
   return rows.map((r) => r.contractEntry?.JsActiveContract?.createdEvent).filter(Boolean)
-    .filter((c) => c.templateId.includes("PledgeGuard"))
-    .map((c) => ({ t: c.templateId.split(":").pop(), a: c.createArgument, cid: c.contractId }));
+    .filter((c) => c.templateId.includes("PledgeGuard") || /Allocation$/.test(c.templateId.split(":").pop()))
+    .map((c) => ({ t: c.templateId.split(":").pop(), a: c.createArgument ?? {}, cid: c.contractId }));
 }
 
-function card({ t, a, cid }) {
-  const keys = (TEMPLATES[t] ?? Object.keys(a)).filter((k) => a[k] !== undefined);
-  const rows = keys.map((k) => `<dt>${k}</dt><dd>${short(a[k])}</dd>`).join("");
-  return `<div class="c ${t}"><div class="t">${t}</div><dl>${rows}</dl></div>`;
-}
+const card = ({ t, a, cid }) => {
+  const keys = (FIELDS[t] ?? Object.keys(a)).filter((k) => a[k] !== undefined);
+  const isNew = !first && !seen.has(cid);
+  seen.add(cid);
+  return `<div class="c ${t}${isNew ? " new" : ""}"><div class="t">${t}</div>
+    <dl>${keys.map((k) => `<dt>${k}</dt><dd>${short(a[k])}</dd>`).join("")}</dl></div>`;
+};
+
+const rowsTable = (head, rows) => rows.length
+  ? `<table class="data"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+     <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+  : `<div class="view"><div class="empty">nothing yet</div></div>`;
 
 async function refresh() {
-  const { offset } = await (await fetch("/api/v2/state/ledger-end")).json();
-  document.getElementById("offset").textContent = "offset " + offset;
+  let offset;
+  try {
+    ({ offset } = await (await fetch("/api/v2/state/ledger-end")).json());
+  } catch (e) { document.getElementById("net").textContent = "unreachable"; return; }
+  document.getElementById("offset").textContent = offset;
+
+  const byParty = {};
+  await Promise.all(parties.map(async (p) => { try { byParty[p.name] = await acs(p.party, offset); } catch (e) { byParty[p.name] = { error: e.message }; } }));
+
+  // party views
   const shown = selected ? parties.filter((p) => p.name === selected) : parties.filter((p) => p.name !== "Auditor");
-  document.getElementById("cols").innerHTML = (await Promise.all(shown.map(async (p) => {
-    let inner;
-    try {
-      const cs = await acs(p.party, offset);
-      inner = cs.length ? cs.map(card).join("")
-        : `<div class="empty">empty: this party is not a stakeholder of anything here</div>`;
-    } catch (e) { inner = `<div class="err">${e.message}</div>`; }
-    return `<section class="col ${p.name.toLowerCase().replace(/\s/g, "")}">
-      <h2>${p.name}<small>${p.role}<br><code class="mono">${p.party.split("::")[0]}</code></small></h2>
-      <div class="body">${inner}</div></section>`;
-  }))).join("");
+  document.getElementById("cols").innerHTML = shown.map((p) => {
+    const cs = byParty[p.name];
+    const body = cs?.error ? `<div class="err">${cs.error}</div>`
+      : cs.length ? `<div class="list">${cs.map(card).join("")}</div>`
+      : `<div class="empty">empty: not a stakeholder of anything here</div>`;
+    return `<section class="view ${p.name.toLowerCase().replace(/\s/g, "")}">
+      <header><span><span class="who">${p.name}</span><span class="role">${p.role}</span></span>
+      <span class="tag">${(cs?.length ?? 0)}</span></header>${body}</section>`;
+  }).join("");
+  first = false;
+
+  // counters and the collision banner
+  const all = Object.values(byParty).flatMap((v) => Array.isArray(v) ? v : []);
+  const notices = (byParty["Auditor"] ?? []).filter((c) => c.t === "CollisionNotice");
+  document.getElementById("n-views").textContent = parties.length;
+  document.getElementById("n-coll").textContent = notices.length || "";
+  document.getElementById("n-reg").textContent = (byParty["Registry"] ?? []).length || "";
+  document.getElementById("net").textContent = "DevNet, hackcanton-devnet-3";
+
+  const banner = document.getElementById("collision-banner");
+  banner.classList.toggle("hidden", notices.length === 0);
+  if (notices.length) {
+    const h = notices[notices.length - 1].a.hash;
+    document.getElementById("collision-detail").textContent =
+      `fingerprint ${short(h)} carried a live claim. ${notices.length} notice(s), 0 transferred, counterparties not disclosed.`;
+  }
+
+  document.getElementById("coll-count").textContent = notices.length;
+  document.getElementById("coll-table").innerHTML = rowsTable(
+    ["Fingerprint", "Notified lender", "At", "Underlying facility"],
+    notices.map((n) => [`<span style="color:var(--accent)">${short(n.a.hash)}</span>`, short(n.a.recipient),
+      String(n.a.at ?? "").replace("T", " ").slice(0, 19), `<span class="redacted">not available</span>`]));
+
+  const reg = byParty["Registry"] ?? [];
+  document.getElementById("reg-table").innerHTML = rowsTable(
+    ["Contract", "Fingerprint", "Holder or recipient", "Terms"],
+    reg.map((c) => [c.t, c.a.hash ? `<span style="color:var(--accent)">${short(c.a.hash)}</span>` : "—",
+      short(c.a.holder ?? c.a.lender ?? c.a.recipient ?? c.a.ops ?? null), `<span class="redacted">never held</span>`]));
+
+  const deleg = reg.some((c) => c.t === "RegistryDelegation");
+  const d = document.getElementById("deleg-state");
+  d.textContent = deleg ? "enabled" : "revoked";
+  d.className = "tag " + (deleg ? "ok" : "bad");
 }
+
+document.querySelectorAll("a.nav").forEach((a) => a.addEventListener("click", (e) => {
+  e.preventDefault();
+  document.querySelectorAll("a.nav").forEach((x) => x.setAttribute("aria-current", String(x === a)));
+  document.querySelectorAll(".page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== a.dataset.tab));
+}));
 
 (async () => {
   ({ parties } = await (await fetch("/config")).json());
   const sel = document.getElementById("viewAs");
-  sel.innerHTML = `<option value="">all but the auditor</option>` + parties.map((p) => `<option>${p.name}</option>`).join("");
+  sel.innerHTML = `<option value="">All but the auditor</option>` + parties.map((p) => `<option>${p.name}</option>`).join("");
   sel.onchange = () => { selected = sel.value; refresh(); };
-  refresh();
-  setInterval(refresh, 4000);
+  await refresh();
+  setInterval(() => document.getElementById("auto").checked && refresh(), 4000);
 })();
 </script>
 </html>

@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PledgeGuard, the private collateral integrity layer</title>
+<meta name="description" content="PledgeGuard prevents the same collateral from being pledged twice, without exposing either lender's book. A privacy-preserving collateral registry on Canton Network.">
+<link rel="icon" href="../brand/favicon-64.png">
+<link rel="stylesheet" href="pledgeguard.css">
+<style>
+  /* page-local composition */
+  header.nav {
+    position: sticky; top: 0; z-index: 20; background: rgba(8, 9, 11, 0.82);
+    backdrop-filter: blur(14px); border-bottom: 1px solid var(--line);
+  }
+  header.nav .wrap { display: flex; align-items: center; gap: 28px; height: 58px; }
+  header.nav .brand { display: flex; align-items: center; gap: 9px; font-weight: 500; letter-spacing: -0.02em; }
+  header.nav nav { display: flex; gap: 22px; margin-left: auto; }
+  header.nav nav a { font-size: 13px; color: var(--muted); }
+  header.nav nav a:hover { color: var(--text); }
+  @media (max-width: 860px) { header.nav nav { display: none; } }
+
+  .hero { padding-block: clamp(56px, 10vw, 116px) clamp(40px, 6vw, 72px); border-top: 0; }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr); gap: clamp(32px, 6vw, 80px); align-items: center; }
+  @media (max-width: 960px) { .hero .wrap { grid-template-columns: 1fr; } }
+  .hero .display em { font-style: normal; color: var(--muted); }
+  .cta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* the live proof strip, Ramp-style ticker */
+  .ticker { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #0a0b0e; }
+  .ticker .wrap { display: flex; flex-wrap: wrap; gap: 8px 36px; padding-block: 13px; align-items: baseline; }
+  .ticker .item { display: flex; gap: 8px; align-items: baseline; }
+  .ticker .v { font: 500 12.5px/1 var(--mono); color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .split { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; }
+
+  /* step timeline */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  @media (max-width: 860px) { .steps { grid-template-columns: repeat(2, 1fr); } }
+  .step { background: var(--surface); padding: 16px; text-align: left; border: 0; color: inherit; font: inherit; cursor: pointer; transition: background 160ms ease; }
+  .step:hover { background: var(--surface-2); }
+  .step[aria-selected="true"] { background: #191d24; }
+  .step[aria-selected="true"] .eyebrow .n { color: var(--accent); }
+  .step .t { margin-top: 10px; font-weight: 500; letter-spacing: -0.015em; }
+  .step .d { margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 20px; }
+
+  .outcome { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
+
+  /* party views */
+  .views { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+  .view .rows { display: grid; grid-template-columns: max-content 1fr; gap: 7px 14px; font-family: var(--mono); font-size: 12.5px; }
+  .view .rows dt { color: var(--dim); }
+  .view .rows dd { margin: 0; overflow-wrap: anywhere; }
+
+  footer { border-top: 1px solid var(--line); padding-block: 40px; color: var(--muted); }
+  footer .wrap { display: flex; gap: 16px 32px; flex-wrap: wrap; align-items: baseline; }
+</style>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <svg width="20" height="20" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="8" y="8" width="36" height="36" rx="10" fill="none" stroke="#f5f3ea" stroke-width="4"/>
+        <rect x="20" y="20" width="36" height="36" rx="10" fill="none" stroke="#f5f3ea" stroke-width="4"/>
+      </svg>
+      PledgeGuard
+    </a>
+    <nav>
+      <a href="/app">Live views</a>
+      <a href="#problem">Problem</a>
+      <a href="#canton">Why Canton</a>
+      <a href="#mechanism">Mechanism</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#governance">Governance</a>
+      <a href="#proof">Proof</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ─────────────────────────── hero ─────────────────────────── -->
+  <section class="band hero">
+    <div class="wrap">
+      <div class="stack">
+        <p class="eyebrow">Private collateral registry <span class="n">·</span> Canton Network</p>
+        <h1 class="display">One collateral.<br><em>One live claim.</em></h1>
+        <p class="lead">
+          PledgeGuard prevents the same collateral from being pledged to two lenders,
+          without exposing either lender's book. The check runs inside the settlement:
+          a colliding draw simply does not fund.
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="#mechanism">Explore the mechanism</a>
+          <a class="btn" href="#proof">See it on the ledger</a>
+        </div>
+        <div class="pills">
+          <span class="tag">Privacy preserving</span>
+          <span class="tag">Atomic</span>
+          <span class="tag">No single operator</span>
+        </div>
+      </div>
+
+      <!-- the motif: two lenders reach the same collateral, the registry intercepts -->
+      <svg class="motif" viewBox="0 0 420 340" width="100%" height="auto" aria-label="Two lenders reach the same collateral fingerprint. The registry intercepts the second claim.">
+        <defs>
+          <marker id="a" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M0 0 L8 4 L0 8 z" fill="#5c616c"/>
+          </marker>
+          <marker id="ok" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M0 0 L8 4 L0 8 z" fill="#3fb27f"/>
+          </marker>
+        </defs>
+        <text x="210" y="26" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.6" fill="#5c616c">COLLATERAL</text>
+        <text x="210" y="48" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" fill="#c9b98a">7f8c…a92d</text>
+        <line class="draw" x1="210" y1="62" x2="210" y2="104" stroke="#2a2e36" stroke-width="1" marker-end="url(#a)" pathLength="1"/>
+
+        <rect x="128" y="108" width="164" height="54" rx="4" fill="#101216" stroke="rgba(255,255,255,.14)"/>
+        <circle cx="146" cy="129" r="3" fill="#3fb27f"/>
+        <text x="157" y="127" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.4" fill="#858994">REGISTRY</text>
+        <text x="157" y="147" font-family="Inter, sans-serif" font-size="12" fill="#f5f3ea">sees the hash only</text>
+
+        <!-- lender A: the claim is free, the draw funds -->
+        <path class="draw d2" d="M210 164 L210 196 L96 196 L96 252" fill="none" stroke="#3fb27f" stroke-width="1.2" marker-end="url(#ok)" pathLength="1"/>
+        <rect x="24" y="254" width="144" height="62" rx="4" fill="#101216" stroke="rgba(63,178,127,.32)"/>
+        <text x="40" y="276" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.3" fill="#858994">LENDER A</text>
+        <text x="40" y="296" font-family="Inter, sans-serif" font-size="13" fill="#3fb27f">claim live · funded</text>
+        <text x="40" y="310" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#5c616c">book private</text>
+
+        <!-- lender B: the same fingerprint, intercepted before it reaches the lender -->
+        <path class="draw d3" d="M210 164 L210 196 L324 196 L324 222" fill="none" stroke="#e5484d" stroke-width="1.2" pathLength="1"/>
+        <line x1="303" y1="230" x2="345" y2="230" stroke="#e5484d" stroke-width="2.5"/>
+        <path d="M324 238 L324 252" fill="none" stroke="#e5484d" stroke-width="1.2" stroke-dasharray="2 4" opacity=".4"/>
+        <rect x="252" y="254" width="144" height="62" rx="4" fill="#101216" stroke="rgba(229,72,77,.32)"/>
+        <text x="268" y="276" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.3" fill="#858994">LENDER B</text>
+        <text x="268" y="296" font-family="Inter, sans-serif" font-size="13" fill="#e5484d">blocked · 0 transferred</text>
+        <text x="268" y="310" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#5c616c">book private</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────── proof ticker ─────────────────────────── -->
+  <div class="ticker">
+    <div class="wrap">
+      <span class="item"><span class="eyebrow">Daml templates</span><span class="v">6</span></span>
+      <span class="item"><span class="eyebrow">Scenario transactions</span><span class="v">24</span></span>
+      <span class="item"><span class="eyebrow">Privacy assertions</span><span class="v">all passing</span></span>
+      <span class="item"><span class="eyebrow">Registry threshold</span><span class="v">2 of 3</span></span>
+      <span class="item"><span class="eyebrow">Settled on DevNet</span><span class="v">Canton Coin, cBTC</span></span>
+      <span class="item"><span class="eyebrow">Funds moved on a collision</span><span class="v">0</span></span>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── problem ─────────────────────────── -->
+  <section class="band" id="problem">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <p class="eyebrow">01 <span class="n">·</span> The problem</p>
+        <h2 class="h2">The collateral can be private.<br><span class="body-muted">The collision cannot be.</span></h2>
+        <p class="lead">
+          A borrower pledges the same receivables pool to two lenders. Each lender's diligence is
+          correct on its own book and blind to the other's. Tricolor cost JPMorgan a $170M
+          charge-off. First Brands double-financed receivables into a bankruptcy of roughly $10B.
+        </p>
+      </div>
+
+      <div class="split">
+        <article class="card flush">
+          <div class="card-head"><span class="eyebrow">Today</span><span class="tag bad">undetectable</span></div>
+          <div class="card-body">
+            <table class="data">
+              <tr><td>Borrower pledges pool</td><td class="num">Lender A</td><td class="num">300</td></tr>
+              <tr><td>Same pool, same month</td><td class="num">Lender B</td><td class="num">300</td></tr>
+            </table>
+            <p class="small body-muted" style="margin:14px 0 0">
+              Two facilities. One collateral. No shared visibility, and no neutral place to ask
+              the question without handing over the book.
+            </p>
+          </div>
+        </article>
+
+        <article class="card flush">
+          <div class="card-head"><span class="eyebrow">With PledgeGuard</span><span class="tag ok">caught before funding</span></div>
+          <div class="card-body">
+            <dl class="grid" style="grid-template-columns:max-content 1fr;gap:8px 16px;font-family:var(--mono);font-size:12.5px;margin:0">
+              <dt class="body-muted">Lender A sees</dt><dd style="margin:0">its own facility</dd>
+              <dt class="body-muted">Lender B sees</dt><dd style="margin:0">its own facility</dd>
+              <dt class="body-muted">Registry sees</dt><dd style="margin:0;color:var(--accent)">7f8c…a92d</dd>
+              <dt class="body-muted">Nobody sees</dt><dd style="margin:0" class="redacted">the other side's terms</dd>
+            </dl>
+            <p class="small body-muted" style="margin:14px 0 0">
+              Canton's own CIP #245 names this gap and asks who may hold the role that detects it.
+              It proposes no code. This is the answer.
+            </p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────── why canton ─────────────────────────── -->
+  <section class="band" id="canton">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <p class="eyebrow">02 <span class="n">·</span> Why this needs Canton</p>
+        <h2 class="h2">Detection and confidentiality,<br><span class="body-muted">in the same transaction.</span></h2>
+      </div>
+
+      <div class="card flush">
+        <table class="data">
+          <thead><tr><th>Architecture</th><th>Detects the collision</th><th>Keeps each book private</th><th>Check is atomic with funding</th></tr></thead>
+          <tbody>
+            <tr><td>Public ledger</td><td style="color:var(--green)">yes</td><td style="color:var(--red)">no</td><td style="color:var(--green)">yes</td></tr>
+            <tr><td>Central registry operator</td><td style="color:var(--green)">yes</td><td style="color:var(--accent)">only from other lenders</td><td style="color:var(--red)">no</td></tr>
+            <tr><td style="color:var(--text)">Canton</td><td style="color:var(--green)">yes</td><td style="color:var(--green)">yes</td><td style="color:var(--green)">yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small body-muted" style="max-width:74ch">
+        A central registry can hide lenders from each other but never from itself, and its answer
+        arrives beside the payment rather than inside it, so it can be raced. On Canton the
+        sub-transaction projection gives each lender its own view, a neutral party can sign the
+        check without being a stakeholder of any facility, and the check and the token-standard
+        transfer are one atomic transaction.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────── mechanism ─────────────────────────── -->
+  <section class="band" id="mechanism">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <p class="eyebrow">03 <span class="n">·</span> The mechanism</p>
+        <h2 class="h2">One pledge. One atomic decision.</h2>
+      </div>
+
+      <div>
+        <div class="steps" role="tablist" aria-label="Settlement steps">
+          <button class="step" role="tab" aria-selected="false" data-step="1">
+            <span class="eyebrow"><span class="n">01</span> Hash</span>
+            <div class="t">Fingerprint</div>
+            <div class="d">The identifying fields of the collateral pack are normalised and hashed. Never the PDF.</div>
+          </button>
+          <button class="step" role="tab" aria-selected="false" data-step="2">
+            <span class="eyebrow"><span class="n">02</span> Facility</span>
+            <div class="t">Bilateral</div>
+            <div class="d">Lender and borrower sign. Amount, rate, maturity. The registry is not a party to it.</div>
+          </button>
+          <button class="step" role="tab" aria-selected="false" data-step="3">
+            <span class="eyebrow"><span class="n">03</span> Allocate</span>
+            <div class="t">Settlement asset</div>
+            <div class="d">The lender allocates the draw leg through the instrument's own registry, executor set to PledgeGuard.</div>
+          </button>
+          <button class="step" role="tab" aria-selected="true" data-step="4">
+            <span class="eyebrow"><span class="n">04</span> Check + settle</span>
+            <div class="t">The atomic decision</div>
+            <div class="d">One choice: verify the fingerprint is free, record the claim, execute the transfer.</div>
+          </button>
+          <button class="step" role="tab" aria-selected="false" data-step="5">
+            <span class="eyebrow"><span class="n">05</span> Release</span>
+            <div class="t">Repayment</div>
+            <div class="d">The claim is archived and the fingerprint is available again.</div>
+          </button>
+        </div>
+
+        <div class="outcome" id="outcome"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────── privacy ─────────────────────────── -->
+  <section class="band" id="privacy" style="position:relative">
+    <div class="texture" aria-hidden="true"></div>
+    <div class="wrap stack-lg" style="position:relative">
+      <div class="stack">
+        <p class="eyebrow">04 <span class="n">·</span> Privacy model</p>
+        <h2 class="h2">Same truth. Four views.</h2>
+        <p class="lead">
+          These are not filtered screens. Each panel is what that party's own participant returns
+          from <span class="mono">/v2/state/active-contracts</span>. A party that is not a
+          stakeholder never receives the contract at all.
+        </p>
+      </div>
+
+      <div class="views">
+        <article class="card view flush">
+          <div class="card-head"><span class="eyebrow">Borrower</span></div>
+          <div class="card-body">
+            <dl class="rows">
+              <dt>collateral</dt><dd style="color:var(--accent)">7f8c…a92d</dd>
+              <dt>facilities</dt><dd>2</dd>
+              <dt>collisions</dt><dd class="redacted">not visible</dd>
+            </dl>
+          </div>
+        </article>
+        <article class="card view flush">
+          <div class="card-head"><span class="eyebrow">Lender A</span><span class="tag ok">funded</span></div>
+          <div class="card-body">
+            <dl class="rows">
+              <dt>collateral</dt><dd style="color:var(--accent)">7f8c…a92d</dd>
+              <dt>amount</dt><dd>300</dd>
+              <dt>claim</dt><dd style="color:var(--green)">live</dd>
+              <dt>lender B</dt><dd class="redacted">does not exist here</dd>
+            </dl>
+          </div>
+        </article>
+        <article class="card view flush">
+          <div class="card-head"><span class="eyebrow">Lender B</span><span class="tag bad">collision</span></div>
+          <div class="card-body">
+            <dl class="rows">
+              <dt>collateral</dt><dd style="color:var(--accent)">7f8c…a92d</dd>
+              <dt>amount</dt><dd>180</dd>
+              <dt>transferred</dt><dd style="color:var(--red)">0</dd>
+              <dt>lender A</dt><dd class="redacted">does not exist here</dd>
+            </dl>
+          </div>
+        </article>
+        <article class="card view flush">
+          <div class="card-head"><span class="eyebrow">Auditor</span></div>
+          <div class="card-body">
+            <dl class="rows">
+              <dt>collisions</dt><dd>2 notices</dd>
+              <dt>facilities</dt><dd class="redacted">none</dd>
+              <dt>amounts</dt><dd class="redacted">none</dd>
+              <dt>claims</dt><dd class="redacted">none</dd>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <div class="card flush">
+        <div class="card-head"><span class="eyebrow">What the registry itself can see</span><span class="tag hold">stated plainly</span></div>
+        <div class="card-body">
+          <p class="small body-muted" style="margin:0;max-width:78ch">
+            The registry holds fingerprints, a per-hash index, claims without terms, and collision
+            notices. It also sees the amount of the leg it executes, because it is the
+            token-standard executor and a party that sees an action sees its consequences. It never
+            holds a facility: no commitment, no rate, no maturity. We say this before a reviewer
+            finds it.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────── governance ─────────────────────────── -->
+  <section class="band" id="governance">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <p class="eyebrow">05 <span class="n">·</span> Governance</p>
+        <h2 class="h2">The registry belongs to no one.</h2>
+        <p class="lead">
+          A market utility that lenders must trust cannot be one company's database. The registry's
+          identity is a Canton Decentralized Party: hosted by three participants, two of three
+          owner keys required for anything sensitive.
+        </p>
+      </div>
+
+      <div class="split">
+        <article class="card flush">
+          <div class="card-head"><span class="eyebrow">Automation handles the ordinary</span><span class="tag ok">delegated once, by vote</span></div>
+          <div class="card-body">
+            <table class="data">
+              <tr><td>Open the index for a new fingerprint</td><td class="num" style="color:var(--green)">automatic</td></tr>
+              <tr><td>Check and settle a draw</td><td class="num" style="color:var(--green)">automatic</td></tr>
+            </table>
+            <p class="small body-muted" style="margin:14px 0 0">
+              Every Daml check still applies. The automation can never settle without the live
+              delegation, and that is asserted in the test suite.
+            </p>
+          </div>
+        </article>
+
+        <article class="card flush">
+          <div class="card-head"><span class="eyebrow">Governance controls the exceptional</span><span class="tag hold">2 of 3</span></div>
+          <div class="card-body">
+            <table class="data">
+              <tr><td>Grant the delegation</td><td class="num" style="color:var(--accent)">vote</td></tr>
+              <tr><td>Revoke the automation</td><td class="num" style="color:var(--accent)">vote</td></tr>
+              <tr><td>Force-release a disputed fingerprint</td><td class="num" style="color:var(--accent)">vote</td></tr>
+            </table>
+            <p class="small body-muted" style="margin:14px 0 0">
+              Below the threshold the ledger itself refuses:
+              <span class="mono" style="color:var(--red)">"Enough confirmations to execute action" was not met.</span>
+              The threshold lives in the Daml contract, not in a backend.
+            </p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────── proof ─────────────────────────── -->
+  <section class="band" id="proof">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <p class="eyebrow">06 <span class="n">·</span> Proof</p>
+        <h2 class="h2">Proven on the ledger,<br><span class="body-muted">not in a diagram.</span></h2>
+      </div>
+
+      <div class="grid cols-4">
+        <div class="card stat"><div class="k" data-count="24">0</div><div class="l eyebrow">Transactions in the scenario</div></div>
+        <div class="card stat"><div class="k" data-count="6">0</div><div class="l eyebrow">Daml templates</div></div>
+        <div class="card stat"><div class="k">2 / 3</div><div class="l eyebrow">Registry governance</div></div>
+        <div class="card stat"><div class="k" style="color:var(--red)">0</div><div class="l eyebrow">Colliding draws funded</div></div>
+      </div>
+
+      <div class="card flush">
+        <div class="card-head">
+          <span class="eyebrow">DevNet run, 25 September 2026 <span class="n">·</span> node hackcanton-devnet-3 <span class="n">·</span> real Canton Coin</span>
+          <span class="tag"><span class="dot live"></span> live network</span>
+        </div>
+        <table class="data">
+          <thead><tr><th>Offset</th><th>Update id</th><th>Event</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1168752</td><td>12204252f8d1d8db…a6458a4</td><td>fingerprint registered, index opened</td></tr>
+            <tr><td class="num">1168794</td><td>12203923cfd38d57…2cfae06</td><td>lender A allocates 120 CC, executor is the registry</td></tr>
+            <tr><td class="num">1168810</td><td>12205c5d51c77d89…3ae1b44e</td><td style="color:var(--green)">draw A settles: index occupied, claim created, transfer executed, one transaction</td></tr>
+            <tr><td class="num">1168836</td><td>12200a26ada73333…c184a914</td><td style="color:var(--red)">draw B on the same fingerprint: no transfer, one notice per lender</td></tr>
+            <tr><td class="num">1168842</td><td>122060d4fac2b510…148a29bd</td><td>lender A repays, fingerprint released</td></tr>
+            <tr><td class="num">1168872</td><td>1220e5d5d49735d1…752d6374</td><td>lender B retries and settles</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid cols-3">
+        <div class="card">
+          <p class="eyebrow">Reproduce locally</p>
+          <p class="mono small" style="margin:12px 0 0;color:var(--muted)">./daml/build.sh<br>./scripts/localnet.sh scenario</p>
+          <p class="small body-muted" style="margin:12px 0 0">Three Canton participants, the registry as a decentralized party, the governance vote and the below-threshold refusal.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">Reproduce on DevNet</p>
+          <p class="mono small" style="margin:12px 0 0;color:var(--muted)">AMULET=1 ./scripts/devnet.sh scenario<br>CBTC=1 ./scripts/devnet.sh scenario</p>
+          <p class="small body-muted" style="margin:12px 0 0">The same flow against the shared HackCanton node, settling real Canton Coin or real cBTC.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">Honest limits</p>
+          <p class="small body-muted" style="margin:12px 0 0">
+            A matching fingerprint proves the same pack was presented twice, not that a freshly
+            fabricated pack describes the same assets. Index admission is delegated in v1. On the
+            shared DevNet node all parties sit on one participant, so operator independence is
+            shown on LocalNet, not claimed here.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" style="padding-block:clamp(56px,7vw,96px)">
+    <div class="wrap stack">
+      <h2 class="h2">Built for the desks moving collateral on-chain this quarter.</h2>
+      <p class="lead">Receivables and warehouse lenders, private credit, and the collateral venues arriving with tokenised settlement.</p>
+      <div class="cta">
+        <a class="btn primary" href="/app">Open the live party views</a>
+        <a class="btn" href="https://github.com/canton-foundation/cips/pull/245">Read CIP #245</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="eyebrow">PledgeGuard <span class="n">·</span> HackCanton Season 3 <span class="n">·</span> RWA and business workflows</span>
+    <span class="eyebrow" style="margin-left:auto">Built on Canton Network</span>
+  </div>
+</footer>
+
+<script>
+  // Step 04 is the whole product, so it opens on it and shows both outcomes side by side.
+  const OUTCOMES = {
+    1: [["Input", "receivables-pool-v1"], ["Normalised fields", "contract no, debtor, nominal, origination"], ["Output", "sha-256, 64 hex"], ["On the ledger", "hash and schema, no amount"]],
+    2: [["Signatories", "lender and borrower"], ["Carries", "amount, rate, maturity, fingerprint"], ["Registry", "not a stakeholder"], ["Other lenders", "contract does not exist for them"]],
+    3: [["Instrument", "any CIP-56 asset"], ["Sender", "the lender"], ["Receiver", "the borrower"], ["Executor", "the PledgeGuard registry"]],
+    5: [["Trigger", "repayment"], ["Effect", "claim archived, index freed"], ["Next draw", "settles normally"], ["Notices", "stay with the auditor"]],
+  };
+  const outcome = document.getElementById("outcome");
+
+  const table = (rows) => `<table class="data">${rows.map(([k, v]) => `<tr><td class="body-muted">${k}</td><td class="num" style="color:var(--text)">${v}</td></tr>`).join("")}</table>`;
+
+  function render(step) {
+    if (step !== "4") {
+      outcome.innerHTML = `<article class="card flush" style="grid-column:1/-1"><div class="card-head"><span class="eyebrow">Step ${step}</span></div>${table(OUTCOMES[step])}</article>`;
+      return;
+    }
+    outcome.innerHTML = `
+      <article class="card flush">
+        <div class="card-head"><span class="eyebrow">Fingerprint free</span><span class="tag ok">settled</span></div>
+        ${table([["hash", "7f8c…a92d"], ["index", "available"], ["action", "occupy, claim, transfer"], ["result", "one transaction"], ["moved", "120 CC"]])}
+      </article>
+      <article class="card flush" style="border-color:rgba(229,72,77,.28)">
+        <div class="card-head"><span class="eyebrow">Fingerprint already claimed</span><span class="tag bad">blocked</span></div>
+        ${table([["hash", "7f8c…a92d"], ["index", "held by another lender"], ["action", "notice to each lender"], ["result", "transaction succeeds, evidence on the ledger"], ["moved", "0"]])}
+      </article>`;
+  }
+
+  document.querySelectorAll(".step").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll(".step").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    render(b.dataset.step);
+  }));
+  render("4");
+
+  // counters, and the faint hex texture behind the privacy section
+  const io = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) return;
+    io.unobserve(e.target);
+    const to = +e.target.dataset.count; let i = 0;
+    const t = setInterval(() => { i += Math.ceil(to / 18); if (i >= to) { i = to; clearInterval(t); } e.target.textContent = i; }, 34);
+  }), { threshold: 0.6 });
+  document.querySelectorAll("[data-count]").forEach((el) => io.observe(el));
+
+  const hex = "0123456789abcdef";
+  const rnd = (n) => Array.from({ length: n }, () => hex[(Math.random() * 16) | 0]).join("");
+  document.querySelector(".texture").textContent =
+    Array.from({ length: 46 }, () => Array.from({ length: 12 }, () => rnd(8)).join("   ")).join("\n");
+</script>
+</html>

@@ -1,0 +1,166 @@
+/* PledgeGuard design system. One file, no build, shared by the site and the app.
+   Institutional financial infrastructure, not crypto: hairlines instead of shadows,
+   4px radius, champagne accent used sparingly, red reserved for collisions. */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+:root {
+  --bg: #08090b;
+  --surface: #101216;
+  --surface-2: #14171c;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.18);
+  --text: #f5f3ea;
+  --muted: #858994;
+  --dim: #5c616c;
+  --accent: #c9b98a;         /* champagne: labels, live states, the one highlight */
+  --blue: #5b8def;           /* active data */
+  --red: #e5484d;            /* collisions only */
+  --green: #3fb27f;          /* verified only */
+
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --r: 4px;
+  --gut: clamp(20px, 5vw, 72px);
+  --maxw: 1240px;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 15px/24px var(--sans);
+  letter-spacing: -0.011em;
+  font-feature-settings: "cv05", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ---- type scale ---------------------------------------------------------- */
+
+.display {
+  font-size: clamp(38px, 6.2vw, 64px);
+  line-height: 1.02;
+  font-weight: 500;
+  letter-spacing: -0.024em;
+  margin: 0;
+}
+.h2 {
+  font-size: clamp(26px, 3.4vw, 38px);
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: -0.022em;
+  margin: 0;
+}
+.h3 {
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.016em;
+  margin: 0;
+}
+.lead { font-size: 17px; line-height: 27px; color: var(--muted); max-width: 58ch; }
+.body-muted { color: var(--muted); }
+.small { font-size: 13px; line-height: 20px; }
+
+/* the eyebrow: uppercase mono, the institutional tell */
+.eyebrow {
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.eyebrow .n { color: var(--accent); }
+
+.mono { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---- layout -------------------------------------------------------------- */
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding-inline: var(--gut); }
+/* a page band. Scoped to a class so <section> stays free for app layout. */
+.band { padding-block: clamp(64px, 9vw, 128px); border-top: 1px solid var(--line); }
+.grid { display: grid; gap: 16px; }
+.cols-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.cols-3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.cols-4 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.stack-sm > * + * { margin-top: 12px; }
+.stack > * + * { margin-top: 24px; }
+.stack-lg > * + * { margin-top: 48px; }
+
+/* ---- surfaces ------------------------------------------------------------ */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 20px;
+}
+.card.flush { padding: 0; overflow: hidden; }
+.card-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 13px 16px; border-bottom: 1px solid var(--line);
+}
+.card-body { padding: 16px; }
+
+.stat .k { font: 500 clamp(30px, 4vw, 42px)/1 var(--sans); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.stat .l { margin-top: 8px; }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; vertical-align: 1px; }
+.dot.live { background: var(--green); box-shadow: 0 0 0 3px rgba(63, 178, 127, 0.15); }
+.dot.red { background: var(--red); }
+.dot.amber { background: var(--accent); }
+
+.tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 500 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  border: 1px solid var(--line); border-radius: 2px; padding: 5px 8px; color: var(--muted);
+}
+.tag.ok { color: var(--green); border-color: rgba(63, 178, 127, 0.3); }
+.tag.bad { color: var(--red); border-color: rgba(229, 72, 77, 0.35); }
+.tag.hold { color: var(--accent); border-color: rgba(201, 185, 138, 0.3); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 38px; padding: 0 16px; border-radius: var(--r);
+  border: 1px solid var(--line-strong); background: transparent; color: var(--text);
+  font: 500 14px/1 var(--sans); letter-spacing: -0.01em; cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.btn:hover { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.28); }
+.btn.primary { background: var(--text); color: #0b0c0e; border-color: var(--text); }
+.btn.primary:hover { background: #fff; }
+
+/* ---- data tables --------------------------------------------------------- */
+
+table.data { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
+table.data th {
+  text-align: left; font: 500 10.5px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--dim); padding: 10px 16px; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+table.data td { padding: 11px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); vertical-align: top; }
+table.data tr:last-child td { border-bottom: 0; }
+table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.redacted { color: var(--dim); letter-spacing: 0.06em; }
+
+/* ---- the motif: two lines that must not meet ----------------------------- */
+
+.motif line, .motif path, .motif circle, .motif rect { vector-effect: non-scaling-stroke; }
+.draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.4s cubic-bezier(.4,0,.2,1) forwards; }
+.draw.d2 { animation-delay: 0.18s; }
+.draw.d3 { animation-delay: 0.36s; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .draw { animation: none; stroke-dashoffset: 0; } }
+
+/* faint hex texture behind a heading */
+.texture {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  font: 400 11px/22px var(--mono); color: rgba(245, 243, 234, 0.022);
+  white-space: pre; user-select: none;
+}

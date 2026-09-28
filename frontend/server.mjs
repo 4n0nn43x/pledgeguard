@@ -1,4 +1,5 @@
-// Serves the PledgeGuard party views and proxies the Canton JSON Ledger API.
+// Serves the PledgeGuard site (/) and the live party views (/app), and proxies the Canton
+// JSON Ledger API under /api. One process, one URL, which is what a demo link needs.
 // The browser never sees a credential: this process holds the OIDC token and adds it
 // to every proxied call. Node 22, no dependencies.
 //
@@ -14,6 +15,7 @@ import { extname, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const SITE = join(HERE, "../site");
 const ENV_FILE = process.env.ENV_FILE ?? join(HERE, "../scripts/.devnet.env");
 const env = Object.fromEntries(
   readFileSync(ENV_FILE, "utf8").split("\n")
@@ -73,8 +75,18 @@ createServer(async (req, res) => {
       res.writeHead(up.status, { "content-type": "application/json" });
       return res.end(text);
     }
-    const file = url.pathname === "/" ? "index.html" : url.pathname.replace(/^\//, "").replace(/\.\./g, "");
-    const data = await readFile(join(HERE, file));
+    // "/" is the site, "/app" the live views; assets are looked up in both roots.
+    const name = url.pathname === "/" ? "index.html"
+      : url.pathname === "/app" ? "__app__"
+      : url.pathname.replace(/^\//, "").replace(/\.\./g, "");
+    const candidates = name === "__app__"
+      ? [join(HERE, "index.html")]
+      : [join(SITE, name), join(HERE, name)];
+    let data, file = name === "__app__" ? "index.html" : name;
+    for (const c of candidates) {
+      try { data = await readFile(c); break; } catch { /* try the next root */ }
+    }
+    if (!data) { const e = new Error(`not found: ${name}`); e.code = "ENOENT"; throw e; }
     res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
     res.end(data);
   } catch (e) {
@@ -82,6 +94,6 @@ createServer(async (req, res) => {
     res.end(String(e.message ?? e));
   }
 }).listen(PORT, () => {
-  console.log(`PledgeGuard views on http://localhost:${PORT}  (ledger ${LEDGER.replace(/^https:\/\//, "")})`);
+  console.log(`PledgeGuard on http://localhost:${PORT}   site /   live views /app   (ledger ${LEDGER.replace(/^https:\/\//, "")})`);
   console.log(PARTIES.map((p) => `  ${p.name.padEnd(11)} ${p.party}`).join("\n"));
 });

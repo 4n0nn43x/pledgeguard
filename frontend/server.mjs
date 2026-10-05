@@ -65,6 +65,13 @@ createServer(async (req, res) => {
       return res.end(JSON.stringify({ parties: PARTIES, ledger: LEDGER }));
     }
     if (url.pathname.startsWith("/api/")) {
+      // The token can act as every demo party, so the public URL only relays the two reads the
+      // views need. Anything else (submit, parties, users) would let a visitor move the lenders' coins.
+      const route = `${req.method} ${url.pathname.slice(4)}`;
+      if (route !== "POST /v2/state/active-contracts" && route !== "GET /v2/state/ledger-end") {
+        res.writeHead(403, { "content-type": "text/plain" });
+        return res.end("read-only demo proxy");
+      }
       const body = req.method === "POST" ? await new Promise((r) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => r(b)); }) : undefined;
       const up = await fetch(LEDGER + url.pathname.slice(4) + url.search, {
         method: req.method,

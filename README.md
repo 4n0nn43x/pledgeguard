@@ -7,7 +7,7 @@ HackCanton Season #3, track RWA & Business Workflows. Answer to [CIP #245](https
 
 **What PledgeGuard does.** A lender's stablecoin draw is released only after proving, in the same atomic transaction and without revealing its facility, that the collateral fingerprint is not already securing a live draw. The check is performed by a neutral **registry party** that sees hashes, not terms. The registry is a **Decentralized Party** created with BitSafe's [Decentralization Manager](https://github.com/DLC-link/decentralization-manager): hosted on three participants, 2-of-3 owner keys, no single operator.
 
-**Status (24 Sep).** Runs end to end in two places. On the **DecMan LocalNet sandbox**: three Canton participants, the registry as a decentralized party, the delegation granted by a 2-of-3 governance vote, the negative case refused by the ledger (`scripts/localnet.sh`). On the **shared HackCanton DevNet node**: the same flow against the live network, settling **real Canton Coin** through the CIP-56 token standard, evidence below (`scripts/devnet.sh`).
+**Status (5 Oct).** Runs end to end in two places. On the **DecMan LocalNet sandbox**: three Canton participants, the registry as a decentralized party, the delegation granted by a 2-of-3 governance vote, the negative case refused by the ledger (`scripts/localnet.sh`). On the **shared HackCanton DevNet node**: the same flow against the live network, settling **real Canton Coin** through the CIP-56 token standard, evidence below (`scripts/devnet.sh`). The runner can settle in **cBTC**, BitSafe's asset, with `CBTC=1` (the evidence below is Canton Coin): no Daml change, the check executes whatever CIP-56 allocation the lender created.
 
 ### DevNet evidence, run of 25 Sep 2026, real Canton Coin
 
@@ -63,7 +63,7 @@ This matrix is not a UI filter: it is what each party's participant returns from
 
 ## Flow
 
-1. Originator creates `CollateralFingerprint` = `sha256` over the normalised identifying fields of the collateral schema (`receivables-pool-v1`: contract number, debtor, nominal, origination date), never over a PDF. The registry opens one `ClaimIndex` per hash.
+1. Originator creates `CollateralFingerprint` = `sha256` over the normalised identifying fields of the collateral schema (`receivables-pool-v1`: contract number, debtor, nominal, origination date), never over a PDF. The registry opens one `ClaimIndex` per hash; a second fingerprint for a hash that is already indexed is ignored, so a borrower who re-registers a pledged file still collides (step 3b of both scenario scripts re-registers the hash, step 4 asserts the collision; `backend/registry.check.mjs` checks it offline).
 2. Lender and originator sign a bilateral `Facility` (propose / accept).
 3. The lender allocates the stablecoin leg through the instrument's own registry (for Canton Coin:
    `AllocationFactory_Allocate` with the choice context the Amulet registry serves over HTTP),
@@ -111,6 +111,7 @@ scripts/devnet.sh         the same against the shared HackCanton DevNet node
 ```sh
 # dpm 1.0.22: https://github.com/digital-asset/dpm/releases
 ./daml/build.sh   # builds every DAR (SDK 3.5.8 + 3.4.11) and runs the scenario
+node backend/registry.check.mjs   # registry automation against a fake ledger: one index per hash, retries
 ```
 
 Expected: `scenario: ok`. The script covers happy path, collision, wrong index (`submitMustFail`), release, retry, and revocation.
@@ -148,7 +149,9 @@ different participants, which removes the doubt entirely.
 
 ## Known limits (v1)
 
-- The draw leg on LocalNet is a mock `Allocation` (same interface and controllers as Amulet/USDCx); wiring a real Amulet allocation on DevNet is next.
+- On LocalNet the draw leg is a mock `Allocation` (same interface and controllers as Amulet/USDCx). On DevNet it is a real Canton Coin or cBTC allocation.
+- One index per hash is enforced by the registry automation, not by the Daml model (LF 2.2 has no contract keys). A rogue `ops` could still open a second index (see "Honest scope" above).
+- The public demo URL is read-only: its proxy relays only `active-contracts` and `ledger-end`, because the demo token can act as every party.
 - The registry sees draw amounts (see above). A two-phase clearance would hide them but is not atomic.
 - A matching fingerprint proves the same file was presented twice; it does not catch a freshly fabricated file describing the same collateral (CIP #245 says the same).
 - Repayment is off the contract in v1: the lender releases the claim once repaid.

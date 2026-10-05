@@ -13,19 +13,21 @@
 // is off-ledger: TOKEN_REGISTRY_URL is the registry base URL (Amulet on DevNet: the scan API).
 // Without it the choice context is empty, which is what the mock allocation in the tests expects.
 //
-// env: LEDGER_URL, TOKEN (JWT, optional on LocalNet), USER_ID (needs CanActAs ops and
-//      CanReadAs registry), OPS_PARTY, REGISTRY_PARTY, AUDITOR_PARTY, TOKEN_REGISTRY_URL,
-//      STATE_FILE (offset persistence, default ./registry-state.json), POLL_MS (default 1000)
+// env: LEDGER_URL, TOKEN (JWT, optional on LocalNet) or DEVNET_EMAIL + DEVNET_PASSWORD (OIDC, refreshed),
+//      USER_ID (needs CanActAs ops and CanReadAs registry; defaults to the token subject with OIDC),
+//      OPS_PARTY, REGISTRY_PARTY, AUDITOR_PARTY (or OPS, REGISTRY, AUDITOR as in scripts/.devnet.env),
+//      TOKEN_REGISTRY_URL, STATE_FILE (offset persistence, default ./registry-state.json), POLL_MS (default 1000)
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { tokenProvider, tokenSubject } from "./oidc.mjs";
 
 const env = (k, d) => process.env[k] ?? d ?? (() => { throw new Error(`missing env ${k}`); })();
 const LEDGER_URL = env("LEDGER_URL", "http://localhost:7575").replace(/\/$/, "");
-const TOKEN = process.env.TOKEN;
-const USER_ID = env("USER_ID", "ledger-api-user");
-const REGISTRY = env("REGISTRY_PARTY");
-const OPS = env("OPS_PARTY");
-const AUDITOR = env("AUDITOR_PARTY");
+const token = process.env.TOKEN || process.env.DEVNET_EMAIL ? tokenProvider(process.env) : null;
+let USER_ID = process.env.USER_ID; // resolved in main(): the token subject on DevNet
+const REGISTRY = env("REGISTRY_PARTY", process.env.REGISTRY);
+const OPS = env("OPS_PARTY", process.env.OPS);
+const AUDITOR = env("AUDITOR_PARTY", process.env.AUDITOR);
 const STATE_FILE = env("STATE_FILE", "./registry-state.json");
 const POLL_MS = Number(env("POLL_MS", "1000"));
 const REGISTRY_URL = (process.env.TOKEN_REGISTRY_URL ?? "").replace(/\/$/, "");
@@ -44,7 +46,7 @@ const T = {
 async function api(path, body, method = "POST") {
   const res = await fetch(LEDGER_URL + path, {
     method,
-    headers: { "content-type": "application/json", ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}) },
+    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${await token()}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
@@ -178,6 +180,7 @@ async function bootstrap() {
 }
 
 async function main() {
+  USER_ID ??= token && process.env.DEVNET_EMAIL ? tokenSubject(await token()) : "ledger-api-user";
   const state = loadState();
   // ponytail: on restart we rebuild the index map from the ACS and resume from the saved offset.
   // Duplicate reactions are harmless thanks to deterministic commandIds.

@@ -1,7 +1,8 @@
 # Production on the shared server: behind the common Caddy (~/apps/edge), reached only through the
 # "edge" network, never published on the host. Site block: ~/apps/edge/sites/pledgeguard.caddy.
-# Secret: .devnet.env next to this file (chmod 600): the keys of scripts/.devnet.env plus DEMO_PASSWORD,
-# SESSION_SECRET (32+ random chars) and PACKAGE_PREFERENCE (the pledgeguard package id to pin).
+# Secret: .devnet.env next to this file (chmod 600): the party ids and DevNet credentials of
+# scripts/.devnet.env, SESSION_SECRET (32+ random chars), one PASSWORD_<ORG> per organisation and
+# PACKAGE_PREFERENCE (the pledgeguard package id to pin).
 name: pledgeguard
 
 services:

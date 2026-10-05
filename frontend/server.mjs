@@ -1,18 +1,19 @@
-// Serves the PledgeGuard site (/) and the dashboard (/app), proxies the reads of the Canton JSON
-// Ledger API under /api, and runs the workflow actions under /act. One process, one URL.
-// The browser never sees a credential: this process holds the OIDC token. Node 22, no dependencies.
+// Serves the PledgeGuard site (/) and the platform (/app): one sign-in per organisation, each one
+// reading its own ledger contracts and acting in its own role, plus a public visibility matrix.
+// The browser never sees a ledger credential: this process holds the OIDC token. Node 22, no dependencies.
 //
 //   node frontend/server.mjs            # DevNet, reads scripts/.devnet.env
 //   ENV_FILE=... PORT=8090 node frontend/server.mjs
 //
 // Env file: the party ids (ORIGINATOR, LENDER_A, LENDER_B, REGISTRY, OPS, AUDITOR), DEVNET_EMAIL and
-// DEVNET_PASSWORD (or LEDGER_URL + TOKEN on LocalNet). Actions are enabled only when DEMO_PASSWORD and
-// SESSION_SECRET (32+ chars) are set; otherwise the dashboard is read-only. Optional: INSTRUMENT
-// (amulet | cbtc | mock), TOKEN_REGISTRY_URL, PACKAGE_PREFERENCE, MAX_DRAW, MAX_FUND.
+// DEVNET_PASSWORD (or LEDGER_URL + TOKEN on LocalNet), SESSION_SECRET (32+ chars) and one sign-in
+// password per organisation: PASSWORD_ORIGINATOR, PASSWORD_LENDER_A, PASSWORD_LENDER_B,
+// PASSWORD_REGISTRY, PASSWORD_AUDITOR. Optional: INSTRUMENT (amulet | cbtc | mock), TOKEN_REGISTRY_URL,
+// PACKAGE_PREFERENCE, MAX_DRAW, MAX_FUND.
 //
-// Security model: the token can act as every demo party, so the browser never chooses a party or a
-// command. /api relays two reads only; /act runs a fixed set of validated actions, behind a signed
-// session cookie, one at a time, with a per-session rate limit.
+// Security model: the ledger token can act as every party of this deployment, so the browser never
+// chooses a party or a command. The session names the organisation; the server reads that party's
+// contracts only and runs the fixed actions of its role, validated, one at a time, rate limited.
 
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -35,17 +36,18 @@ const LEDGER = env.LEDGER_URL ?? "https://ledger-api-json.participant.hackcanton
 const PORT = Number(process.env.PORT ?? 8090);
 const token = tokenProvider(env);
 
-// The demo parties, in the order the windows are shown.
-const PARTIES = [
-  { name: "Originator", key: "ORIGINATOR", role: "borrower, publishes the collateral fingerprint" },
-  { name: "Lender A", key: "LENDER_A", role: "funds first" },
-  { name: "Lender B", key: "LENDER_B", role: "funds against the same collateral" },
-  { name: "Registry", key: "REGISTRY", role: "neutral, sees hashes, never a facility" },
-  { name: "Auditor", key: "AUDITOR", role: "sees collisions and nothing else" },
-].filter((p) => env[p.key]).map((p) => ({ ...p, party: env[p.key] }));
-const P = Object.fromEntries(PARTIES.map((p) => [p.key, p.party]));
+// The organisations of this deployment, each one a party on its own and a sign-in of its own.
+const ORGS = [
+  { key: "ORIGINATOR", label: "Borrower", blurb: "Pledges its receivables and registers their fingerprint" },
+  { key: "LENDER_A", label: "First lender", blurb: "Finances the borrower against the collateral" },
+  { key: "LENDER_B", label: "Second lender", blurb: "Finances the borrower against the collateral" },
+  { key: "REGISTRY", label: "Registry operator", blurb: "Checks every draw against live pledges, sees fingerprints, never loan terms" },
+  { key: "AUDITOR", label: "Auditor", blurb: "Sees the double pledges that were stopped, nothing else" },
+].filter((o) => env[o.key]).map((o) => ({ ...o, party: env[o.key] }));
+const P = Object.fromEntries(ORGS.map((o) => [o.key, o.party]));
+const LENDERS = ["LENDER_A", "LENDER_B"];
 
-// ---- instrument (CIP-56 token standard registry)
+// ---- instrument (Canton token standard registry)
 const INSTRUMENT = env.INSTRUMENT ?? "amulet";
 const CBTC_ADMIN = env.CBTC_ADMIN ?? "cbtc-network::12202a83c6f4082217c175e29bc53da5f2703ba2675778ab99217a5a881a949203ff";
 const TOKEN_REGISTRY = (env.TOKEN_REGISTRY_URL ?? (INSTRUMENT === "cbtc"
@@ -184,7 +186,6 @@ async function fund(to, amount) {
 const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
 const need = (ok, msg) => { if (!ok) throw bad(msg); };
 const cid = (v, what = "contract id") => { need(typeof v === "string" && /^[0-9a-f]{40,600}$/.test(v), `invalid ${what}`); return v; };
-const lender = (k) => { need(k === "LENDER_A" || k === "LENDER_B", "unknown lender"); return P[k]; };
 const decimal = (v, max, what) => {
   const n = Number(v);
   need((typeof v === "string" || typeof v === "number") && Number.isFinite(n) && n > 0 && n <= max, `${what} must be above 0 and at most ${max}`);
@@ -193,17 +194,16 @@ const decimal = (v, max, what) => {
 const hash = (v) => { need(typeof v === "string" && /^[0-9a-f]{64}$/.test(v), "the fingerprint must be a sha256 in lowercase hex"); return v; };
 const schema = (v) => { need(typeof v === "string" && /^[a-z0-9-]{1,40}$/.test(v), "invalid schema id"); return v; };
 
-// The fingerprint of the scenario being played, so a visitor who just arrived follows the same run.
-let inPlay = null;
-
+// Each organisation runs the actions of its role, as itself. `org` comes from the session, never the body.
+const ROLE = {
+  fingerprint: ["ORIGINATOR"], accept: ["ORIGINATOR"],
+  propose: LENDERS, draw: LENDERS, release: LENDERS, cancel: LENDERS, unlock: LENDERS, fund: LENDERS,
+  grant: ["REGISTRY"], revoke: ["REGISTRY"],
+};
 const ACTIONS = {
-  fingerprint: async (b) => {
-    const tx = await create(P.ORIGINATOR, T.fp, { originator: P.ORIGINATOR, registry: P.REGISTRY, schemaId: schema(b.schemaId), hash: hash(b.hash) });
-    inPlay = b.hash;
-    return tx;
-  },
-  propose: (b) => {
-    const l = lender(b.lender);
+  fingerprint: (b) => create(P.ORIGINATOR, T.fp, { originator: P.ORIGINATOR, registry: P.REGISTRY, schemaId: schema(b.schemaId), hash: hash(b.hash) }),
+  propose: (b, org) => {
+    const l = P[org];
     need(typeof b.maturity === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.maturity) && Date.parse(b.maturity) > Date.now(), "maturity must be a future date");
     return create(l, T.prop, {
       lender: l, originator: P.ORIGINATOR, registry: P.REGISTRY, schemaId: schema(b.schemaId), hash: hash(b.hash),
@@ -211,59 +211,83 @@ const ACTIONS = {
     });
   },
   accept: (b) => exercise(P.ORIGINATOR, T.prop, cid(b.proposalCid), "FacilityProposal_Accept", {}),
-  draw: async (b) => {
-    const l = lender(b.lender), fac = cid(b.facilityCid);
+  draw: async (b, org) => {
+    const l = P[org], fac = cid(b.facilityCid);
     const { cid: allocationCid } = await allocate(l, decimal(b.amount, MAX_DRAW, "draw"), `pledgeguard-draw-${fac.slice(0, 16)}`);
     need(allocationCid, "the token registry created no allocation");
     return exercise(l, T.fac, fac, "Facility_RequestDraw", { allocationCid });
   },
-  release: (b) => exercise(lender(b.lender), T.claim, cid(b.claimCid), "Claim_Release", {}),
-  cancel: (b) => exercise(lender(b.lender), T.draw, cid(b.drawCid), "DrawRequest_Withdraw", {}),
-  unlock: async (b) => { // give back the funds of an allocation that will not settle (a collided draw)
-    const l = lender(b.lender), a = cid(b.allocationCid);
+  release: (b, org) => exercise(P[org], T.claim, cid(b.claimCid), "Claim_Release", {}),
+  cancel: (b, org) => exercise(P[org], T.draw, cid(b.drawCid), "DrawRequest_Withdraw", {}),
+  unlock: async (b, org) => { // give back the funds of an allocation that will not settle (a stopped draw)
+    const a = cid(b.allocationCid);
     const c = INSTRUMENT === "mock" ? { choiceContextData: { values: {} } } : await registry(`/registry/allocations/v1/${encodeURIComponent(a)}/choice-contexts/withdraw`);
-    return exercise(l, T.alloc, a, "Allocation_Withdraw", { extraArgs: { context: c.choiceContextData, meta: { values: {} } } }, disclosedOf(c));
+    return exercise(P[org], T.alloc, a, "Allocation_Withdraw", { extraArgs: { context: c.choiceContextData, meta: { values: {} } } }, disclosedOf(c));
   },
-  fund: (b) => { need(INSTRUMENT === "amulet", "funding is wired for Canton Coin only"); return fund(lender(b.lender), decimal(b.amount, MAX_FUND, "amount")); },
+  fund: (b, org) => { need(INSTRUMENT === "amulet", "treasury top-up is wired for Canton Coin only"); return fund(P[org], decimal(b.amount, MAX_FUND, "amount")); },
   grant: () => create(P.REGISTRY, T.deleg, { registry: P.REGISTRY, ops: P.OPS }),
   revoke: (b) => exercise(P.REGISTRY, T.deleg, cid(b.delegationCid), "Delegation_Revoke", {}),
 };
 
-// ---- auth: one demo password, a signed session cookie, nothing stored server side
-const WRITABLE = Boolean(env.DEMO_PASSWORD && (env.SESSION_SECRET ?? "").length >= 32);
+// ---- auth: one password per organisation, a signed session cookie naming it, nothing stored server side
+const ACCOUNTS = Object.fromEntries(ORGS.filter((o) => env[`PASSWORD_${o.key}`]).map((o) => [o.key, env[`PASSWORD_${o.key}`]]));
+const SIGN_IN = (env.SESSION_SECRET ?? "").length >= 32 && Object.keys(ACCOUNTS).length > 0;
 const SESSION_MS = 8 * 3600e3;
 const sign = (v) => createHmac("sha256", env.SESSION_SECRET).update(v).digest("base64url");
 const same = (a, b) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+// cookie: expiry.org.mode.id.mac, mode "member" (signed in) or "guest" (read-only, no password)
 function session(req) {
-  if (!WRITABLE) return null;
-  const m = /(?:^|;\s*)pg_session=([\w-]+)\.([\w-]+)\.([\w-]+)/.exec(req.headers.cookie ?? "");
-  if (!m || !same(m[3], sign(`${m[1]}.${m[2]}`)) || Number(m[1]) < Date.now()) return null;
-  return { id: m[2] };
+  if (!SIGN_IN) return null;
+  const m = /(?:^|;\s*)pg_session=(\d+)\.([A-Z_]+)\.(member|guest)\.([\w-]+)\.([\w-]+)/.exec(req.headers.cookie ?? "");
+  if (!m || !same(m[5], sign(`${m[1]}.${m[2]}.${m[3]}.${m[4]}`)) || Number(m[1]) < Date.now() || !P[m[2]]) return null;
+  if (m[3] === "member" && !ACCOUNTS[m[2]]) return null;
+  return { org: m[2], guest: m[3] === "guest", id: m[4] };
 }
+const newSession = (org, mode, ms) => { const v = `${Date.now() + ms}.${org}.${mode}.${randomBytes(12).toString("base64url")}`; return cookie(`${v}.${sign(v)}`, ms / 1000); };
 const cookie = (v, maxAge) => `pg_session=${v}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
 // Caddy replaces any client-sent X-Forwarded-For (no trusted proxies), so its first entry is the client.
 const clientIp = (req) => (req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress;
 
-// ponytail: in-memory counters, reset on restart; enough for one demo instance
+// ponytail: in-memory counters, reset on restart; a shared store (Redis) once there is more than one instance
 const hits = new Map();
 function limited(key, max, windowMs) {
   const now = Date.now(), h = hits.get(key);
   if (!h || h.until < now) { hits.set(key, { n: 1, until: now + windowMs }); return false; }
   return ++h.n > max;
 }
+const blocked = (key, max) => { const h = hits.get(key); return Boolean(h && h.until >= Date.now() && h.n >= max); };
 
 // Writes go one at a time: two draws in parallel would spend the same holdings.
 let queue = Promise.resolve();
 const serial = (fn) => { const run = queue.then(fn); queue = run.catch(() => {}); return run; };
 
-// ---- balances, cached briefly: every open dashboard polls them
-let balances = { at: 0, value: null };
-async function getBalances() {
-  if (Date.now() - balances.at < 5000 && balances.value) return balances.value;
-  const keys = ["ORIGINATOR", "LENDER_A", "LENDER_B"].filter((k) => P[k]);
-  const sums = await Promise.all(keys.map(async (k) => (await holdings(P[k])).reduce((s, h) => s + h.amount, 0)));
-  balances = { at: Date.now(), value: Object.fromEntries(keys.map((k, i) => [k, sums[i]])) };
-  return balances.value;
+// ---- reads: an organisation's own contracts, and the public visibility matrix (template counts only)
+async function contractsOf(party) {
+  const { offset } = await ledger("/v2/state/ledger-end", undefined, "GET");
+  const rows = await ledger("/v2/state/active-contracts", { activeAtOffset: offset, verbose: false, eventFormat: { filtersByParty: wildcard(party), verbose: false } });
+  const contracts = rows.map((r) => r.contractEntry?.JsActiveContract?.createdEvent).filter(Boolean)
+    .map((c) => ({ t: c.templateId.split(":").pop(), a: c.createArgument ?? {}, cid: c.contractId }))
+    // the test package's mock instrument is not part of this deployment
+    .filter((c) => INSTRUMENT === "mock" || !c.t.startsWith("Mock"))
+    .filter((c) => c.t !== "Holding" && (/^(CollateralFingerprint|FacilityProposal|Facility|DrawRequest|ClaimIndex|Claim|CollisionNotice|RegistryDelegation)$/.test(c.t) || /Allocation$/.test(c.t)))
+    .map((c) => {
+      const leg = c.a.allocation?.transferLeg; // a token-standard allocation nests its leg
+      return leg ? { ...c, a: { amount: leg.amount, sender: leg.sender, receiver: leg.receiver } } : c;
+    });
+  return { offset, contracts };
+}
+
+let matrix = { at: 0, value: null };
+async function visibility() {
+  if (Date.now() - matrix.at < 10_000 && matrix.value) return matrix.value;
+  const rows = await Promise.all(ORGS.map(async (o) => {
+    const { contracts } = await contractsOf(o.party);
+    const counts = {};
+    for (const c of contracts) { const t = /Allocation$/.test(c.t) ? "Allocation" : c.t; counts[t] = (counts[t] ?? 0) + 1; }
+    return { key: o.key, label: o.label, counts };
+  }));
+  matrix = { at: Date.now(), value: rows };
+  return rows;
 }
 
 // ---- http
@@ -282,54 +306,62 @@ createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   try {
     if (url.pathname === "/config") {
-      return json(res, 200, { parties: PARTIES, ledger: LEDGER, writable: WRITABLE, instrument: INSTRUMENT, unit: UNIT, maxDraw: MAX_DRAW, maxFund: MAX_FUND });
+      return json(res, 200, {
+        orgs: ORGS.map(({ key, label, blurb, party }) => ({ key, label, blurb, party })), signIn: SIGN_IN,
+        network: "Canton DevNet", instrument: INSTRUMENT, unit: UNIT, maxDraw: MAX_DRAW, maxFund: MAX_FUND,
+      });
     }
-    if (url.pathname === "/state") return json(res, 200, { balances: await getBalances(), hash: inPlay });
+    if (url.pathname === "/visibility") return json(res, 200, await visibility());
+
+    if (url.pathname === "/auth/me") { const s = session(req); return json(res, 200, { org: s?.org ?? null, guest: Boolean(s?.guest) }); }
+    if (url.pathname.startsWith("/me/")) {
+      const s = session(req);
+      if (!s) return json(res, 401, { error: "sign in first" });
+      if (url.pathname === "/me/contracts") return json(res, 200, await contractsOf(P[s.org]));
+      if (url.pathname === "/me/balance") {
+        const hs = ["ORIGINATOR", ...LENDERS].includes(s.org) ? await holdings(P[s.org]) : [];
+        return json(res, 200, { balance: hs.reduce((n, h) => n + h.amount, 0) });
+      }
+      return json(res, 404, { error: "not found" });
+    }
 
     if (url.pathname.startsWith("/auth/") || url.pathname.startsWith("/act/")) {
-      if (url.pathname === "/auth/me") return json(res, 200, { signedIn: Boolean(session(req)), writable: WRITABLE });
       if (req.method !== "POST") return json(res, 405, { error: "POST only" });
       if (!sameOrigin(req) || !String(req.headers["content-type"]).startsWith("application/json")) return json(res, 403, { error: "cross-origin or non-JSON request refused" });
-      if (!WRITABLE) return json(res, 403, { error: "this instance is read-only" });
+      if (!SIGN_IN) return json(res, 403, { error: "sign-in is not configured" });
 
       if (url.pathname === "/auth/login") {
-        const ip = clientIp(req);
-        if (limited(`login:${ip}`, 10, 15 * 60e3)) return json(res, 429, { error: "too many attempts, wait 15 minutes" });
-        const { password } = await readJson(req);
-        const digest = (s) => createHash("sha256").update(String(s ?? "")).digest("base64url");
-        if (!same(digest(password), digest(env.DEMO_PASSWORD))) return json(res, 401, { error: "wrong password" });
-        const v = `${Date.now() + SESSION_MS}.${randomBytes(12).toString("base64url")}`;
-        return json(res, 200, { signedIn: true }, { "set-cookie": cookie(`${v}.${sign(v)}`, SESSION_MS / 1000) });
+        // only failed attempts count: 10 per 15 minutes per address
+        const key = `login:${clientIp(req)}`;
+        if (blocked(key, 10)) return json(res, 429, { error: "too many failed attempts, wait 15 minutes" });
+        const { org, password } = await readJson(req);
+        const digest = (v) => createHash("sha256").update(String(v ?? "")).digest("base64url");
+        if (!Object.hasOwn(ACCOUNTS, org) || !same(digest(password), digest(ACCOUNTS[org]))) {
+          limited(key, 10, 15 * 60e3);
+          return json(res, 401, { error: "wrong organisation or password" });
+        }
+        return json(res, 200, { org, guest: false }, { "set-cookie": newSession(org, "member", SESSION_MS) });
       }
-      if (url.pathname === "/auth/logout") return json(res, 200, { signedIn: false }, { "set-cookie": cookie("x.x.x", 0) });
+      // Read-only look at one organisation's workspace, without an account: what a visitor or a judge needs.
+      if (url.pathname === "/auth/guest") {
+        if (limited(`guest:${clientIp(req)}`, 60, 15 * 60e3)) return json(res, 429, { error: "too many requests, wait a few minutes" });
+        const { org } = await readJson(req);
+        if (!Object.hasOwn(P, org) || !ORGS.some((o) => o.key === org)) return json(res, 400, { error: "unknown organisation" });
+        return json(res, 200, { org, guest: true }, { "set-cookie": newSession(org, "guest", 3600e3) });
+      }
+      if (url.pathname === "/auth/logout") return json(res, 200, { org: null }, { "set-cookie": cookie("0.X.guest.x.x", 0) });
 
       const s = session(req);
       if (!s) return json(res, 401, { error: "sign in first" });
-      const action = ACTIONS[url.pathname.slice(5)];
-      if (!Object.hasOwn(ACTIONS, url.pathname.slice(5))) return json(res, 404, { error: "unknown action" });
+      const name = url.pathname.slice(5);
+      if (!Object.hasOwn(ACTIONS, name)) return json(res, 404, { error: "unknown action" });
+      if (s.guest) return json(res, 403, { error: "read-only access: sign in to act" });
+      if (!ROLE[name].includes(s.org)) return json(res, 403, { error: "not an action of your organisation" });
       if (limited(`act:${s.id}`, 30, 60e3)) return json(res, 429, { error: "slow down: 30 actions a minute" });
       const body = await readJson(req);
-      const tx = await serial(() => action(body));
-      balances.at = 0;
+      const tx = await serial(() => ACTIONS[name](body, s.org));
+      matrix.at = 0;
       return json(res, 200, { ok: true, updateId: tx.updateId, offset: tx.offset, created: tx.created });
-    }
-
-    if (url.pathname.startsWith("/api/")) {
-      // The token can act as every demo party, so /api only relays the two reads the views need.
-      const route = `${req.method} ${url.pathname.slice(4)}`;
-      if (route !== "POST /v2/state/active-contracts" && route !== "GET /v2/state/ledger-end") {
-        res.writeHead(403, { "content-type": "text/plain" });
-        return res.end("read-only demo proxy");
-      }
-      const body = req.method === "POST" ? await readBody(req) : undefined;
-      const up = await fetch(LEDGER + url.pathname.slice(4) + url.search, {
-        method: req.method,
-        headers: { "content-type": "application/json", authorization: `Bearer ${await token()}` },
-        body,
-      });
-      const text = await up.text();
-      res.writeHead(up.status, { "content-type": "application/json" });
-      return res.end(text);
     }
 
     // "/" is the site, "/app" the dashboard; assets are looked up in both roots.
@@ -347,14 +379,14 @@ createServer(async (req, res) => {
     res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
     res.end(data);
   } catch (e) {
-    if (url.pathname.startsWith("/act/") || url.pathname.startsWith("/auth/") || url.pathname === "/state") {
+    if (/^\/(act|auth|me)\//.test(url.pathname) || url.pathname === "/visibility") {
       return json(res, e.status ?? 500, { error: String(e.message ?? e) });
     }
     res.writeHead(e.code === "ENOENT" ? 404 : 500, { "content-type": "text/plain" });
     res.end(String(e.message ?? e));
   }
 }).listen(PORT, () => {
-  console.log(`PledgeGuard on http://localhost:${PORT}   site /   dashboard /app   (ledger ${LEDGER.replace(/^https:\/\//, "")})`);
-  console.log(`actions ${WRITABLE ? `enabled, settling in ${UNIT}` : "disabled (set DEMO_PASSWORD and SESSION_SECRET)"}`);
-  console.log(PARTIES.map((p) => `  ${p.name.padEnd(11)} ${p.party}`).join("\n"));
+  console.log(`PledgeGuard on http://localhost:${PORT}   site /   platform /app   (ledger ${LEDGER.replace(/^https:\/\//, "")})`);
+  console.log(`sign-in ${SIGN_IN ? `for ${Object.keys(ACCOUNTS).join(", ")}, settling in ${UNIT}` : "not configured (SESSION_SECRET and PASSWORD_<ORG>)"}`);
+  console.log(ORGS.map((o) => `  ${o.label.padEnd(18)} ${o.party}`).join("\n"));
 });

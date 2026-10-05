@@ -2,18 +2,21 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PledgeGuard dashboard</title>
+<title>PledgeGuard platform</title>
 <link rel="icon" href="favicon.png">
 <link rel="stylesheet" href="pledgeguard.css">
 <style>
-  body { display: grid; grid-template-columns: 216px 1fr; min-height: 100vh; }
-  @media (max-width: 900px) { body { grid-template-columns: 1fr; } aside { display: none; } }
+  body { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+  @media (max-width: 900px) { body { grid-template-columns: 1fr; } aside { position: static !important; height: auto !important; } }
 
   aside {
     border-right: 1px solid var(--line); background: #0a0b0e;
     display: flex; flex-direction: column; padding: 16px 0; position: sticky; top: 0; height: 100vh;
   }
-  aside .brand { display: flex; align-items: center; gap: 9px; padding: 4px 18px 22px; font-weight: 500; letter-spacing: -0.02em; }
+  aside .brand { display: flex; align-items: center; gap: 9px; padding: 4px 18px 20px; font-weight: 500; letter-spacing: -0.02em; }
+  aside .org { margin: 0 12px 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+  aside .org .l { font-weight: 500; font-size: 14px; }
+  aside .org .b { margin-top: 3px; font: 400 11px/15px var(--mono); color: var(--dim); }
   aside .group { padding: 14px 18px 6px; }
   aside a.nav {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -21,106 +24,68 @@
   }
   aside a.nav:hover { color: var(--text); background: rgba(255, 255, 255, 0.03); }
   aside a.nav[aria-current="true"] { color: var(--text); border-left-color: var(--accent); background: rgba(255, 255, 255, 0.04); }
-  aside a.nav .c { font: 500 11px/1 var(--mono); color: var(--dim); }
   aside .foot { margin-top: auto; padding: 16px 18px 0; border-top: 1px solid var(--line); }
 
   main { min-width: 0; }
   .topbar {
     position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    padding: 0 var(--gut); height: 58px; border-bottom: 1px solid var(--line);
+    padding: 0 var(--gut); min-height: 58px; border-bottom: 1px solid var(--line);
     background: rgba(8, 9, 11, 0.86); backdrop-filter: blur(14px);
   }
-  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
-  .topbar select {
-    background: var(--surface); color: var(--text); border: 1px solid var(--line);
-    border-radius: var(--r); padding: 6px 10px; font: 500 12.5px var(--sans);
-  }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
   .page { padding: clamp(20px, 3vw, 34px) var(--gut) 64px; }
   .page > * + * { margin-top: 18px; }
-  .pagehead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .hidden { display: none !important; }
 
-  /* the party columns, the heart of the demo */
-  .views { display: grid; grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); gap: 12px; align-items: start; }
-  .view { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
-  .view > header {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-    padding: 12px 14px; border-bottom: 1px solid var(--line);
-  }
-  .view > header .who { font-weight: 500; letter-spacing: -0.015em; }
-  .view > header .role { display: block; margin-top: 3px; font: 400 11px/15px var(--mono); color: var(--dim); }
-  .view.registry { border-color: rgba(201, 185, 138, 0.28); }
-  .view .list { padding: 10px 14px 14px; }
-  .view .empty { padding: 30px 14px; text-align: center; color: var(--dim); font-size: 13px; }
+  .head h1 { font-size: 26px; margin: 0; }
+  .head p { margin: 6px 0 0; max-width: 72ch; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start; }
+  .card-head .tag { font-variant-numeric: tabular-nums; }
+  .empty { padding: 22px 16px; color: var(--dim); font-size: 13px; }
+  table.data td .hash { color: var(--accent); }
+  table.data td.act { text-align: right; white-space: nowrap; }
+  .alert td { background: #17100f; }
 
-  .c {
-    border-left: 2px solid var(--line-strong); padding: 9px 11px; margin-top: 9px;
-    background: #0d1014; border-radius: 0 3px 3px 0;
-  }
-  .c .t { font: 500 12px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
-  .c dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0 0; font: 400 12px/17px var(--mono); }
-  .c dt { color: var(--dim); }
-  .c dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-  .c.Facility { border-left-color: var(--blue); }
-  .c.Claim, .c.ClaimIndex { border-left-color: var(--green); }
-  .c.CollateralFingerprint, .c.RegistryDelegation, .c.DrawRequest { border-left-color: #4a505c; }
-  .c.CollisionNotice { border-left-color: var(--red); background: #17100f; }
-  .c.CollisionNotice .t { color: var(--red); }
-  .c.AmuletAllocation, .c.MockAllocation { border-left-color: var(--accent); }
-  .new { animation: flash 1.6s ease; }
-  @keyframes flash { from { background: rgba(201, 185, 138, 0.14); } }
-
-  .err { color: var(--red); font-size: 12.5px; padding: 14px; }
-  .banner {
-    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-    border: 1px solid rgba(229, 72, 77, 0.35); background: #17100f; border-radius: var(--r);
-  }
-  .hidden { display: none; }
-
-  /* actions: forms in the column head, buttons on the cards */
-  .acts { padding: 12px 14px; border-bottom: 1px solid var(--line); background: #0c0e12; }
-  .acts summary { cursor: pointer; font: 500 12px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-  .acts form { display: grid; gap: 8px; margin-top: 10px; }
-  .acts label { display: grid; gap: 4px; font: 400 11px/1.3 var(--mono); color: var(--dim); }
+  form.f { display: grid; gap: 10px; padding: 16px; }
+  form.f label { display: grid; gap: 5px; font: 400 11.5px/1.3 var(--mono); color: var(--dim); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row > label { flex: 1; min-width: 120px; }
   input.f {
-    width: 100%; box-sizing: border-box; background: var(--surface); color: var(--text); border: 1px solid var(--line);
-    border-radius: var(--r); padding: 6px 8px; font: 400 12.5px var(--mono);
+    width: 100%; box-sizing: border-box; background: #0c0e12; color: var(--text); border: 1px solid var(--line);
+    border-radius: var(--r); padding: 7px 9px; font: 400 13px var(--mono);
   }
   input.f:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .bal { font: 500 12px var(--mono); color: var(--text); }
+  input.f.small { width: 84px; padding: 5px 7px; }
+  .hint { font: 400 11.5px/1.45 var(--mono); color: var(--dim); }
+  .bal { font: 500 clamp(24px, 3vw, 32px)/1 var(--sans); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
   button.a {
-    font: 500 12px var(--sans); padding: 6px 10px; border-radius: var(--r); cursor: pointer;
+    font: 500 12.5px var(--sans); padding: 7px 12px; border-radius: var(--r); cursor: pointer;
     border: 1px solid rgba(255, 255, 255, 0.18); background: transparent; color: var(--text);
   }
   button.a:hover { border-color: var(--accent); }
   button.a.go { background: var(--text); color: #0b0c0e; border-color: var(--text); }
   button.a.warn { color: var(--red); border-color: rgba(229, 72, 77, 0.4); }
   button.a:disabled { opacity: 0.5; cursor: wait; }
-  .c .ops { display: flex; gap: 6px; align-items: center; margin-top: 9px; flex-wrap: wrap; }
-  .c .ops input.f { width: 90px; }
-  .hint { font: 400 11px/1.4 var(--mono); color: var(--dim); }
 
-  /* the guided scenario */
-  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
-  .step { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; background: var(--surface); }
-  .step .n { font: 500 11px/1 var(--mono); color: var(--dim); }
-  .step .w { margin-top: 6px; font-size: 13px; }
-  .step .h { margin-top: 4px; font: 400 11px/1.4 var(--mono); color: var(--dim); }
-  .step.done { border-color: rgba(63, 178, 127, 0.4); }
-  .step.done .n { color: var(--green); }
-  .step.next { border-color: var(--accent); }
-  .step.next .n { color: var(--accent); }
-  .step.bad.done { border-color: rgba(229, 72, 77, 0.45); }
-  .step.bad.done .n { color: var(--red); }
+  /* sign-in */
+  .orgs { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .orgpick { text-align: left; padding: 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
+  .orgpick:hover { border-color: rgba(255, 255, 255, 0.25); }
+  .orgpick[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .orgpick .l { font-weight: 500; }
+  .orgpick .b { margin-top: 4px; font: 400 11.5px/1.45 var(--mono); color: var(--dim); }
 
-  /* toasts and sign-in */
-  #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: grid; gap: 8px; max-width: min(420px, calc(100vw - 32px)); }
+  /* visibility matrix */
+  table.matrix td, table.matrix th { text-align: center; }
+  table.matrix td:first-child, table.matrix th:first-child { text-align: left; }
+  table.matrix td.none { color: var(--dim); }
+
+  #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: grid; gap: 8px; max-width: min(440px, calc(100vw - 32px)); }
   .toast { padding: 10px 12px; border-radius: var(--r); background: #12151a; border: 1px solid var(--line); font-size: 12.5px; }
   .toast.ok { border-color: rgba(63, 178, 127, 0.45); }
   .toast.err { border-color: rgba(229, 72, 77, 0.5); color: #f3c9ca; }
   .toast .mono { display: block; margin-top: 4px; color: var(--dim); font-size: 11px; overflow-wrap: anywhere; }
-  dialog { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; width: min(360px, calc(100vw - 32px)); }
-  dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
 </style>
 
 <aside>
@@ -131,249 +96,115 @@
     </svg>
     PledgeGuard
   </a>
+  <div class="org hidden" id="org-card"><div class="l" id="org-label"></div><div class="b" id="org-blurb"></div></div>
 
-  <div class="group eyebrow">Ledger</div>
-  <a class="nav" href="#" data-tab="views" aria-current="true">Party views <span class="c" id="n-views"></span></a>
-  <a class="nav" href="#" data-tab="collisions">Collisions <span class="c" id="n-coll"></span></a>
-  <a class="nav" href="#" data-tab="registry">Registry <span class="c" id="n-reg"></span></a>
-
-  <div class="group eyebrow">Trust</div>
-  <a class="nav" href="#" data-tab="governance">Governance</a>
-  <a class="nav" href="#" data-tab="proof">Proof</a>
+  <div class="group eyebrow">Platform</div>
+  <a class="nav" href="#workspace" data-tab="workspace" aria-current="true"><span id="nav-workspace">Sign in</span></a>
+  <a class="nav" href="#visibility" data-tab="visibility">Visibility</a>
+  <a class="nav" href="#governance" data-tab="governance">Governance</a>
 
   <div class="foot">
     <p class="eyebrow" style="margin:0 0 8px">Network</p>
-    <p class="mono small" style="margin:0"><span class="dot live"></span> <span id="net">connecting</span></p>
-    <p class="eyebrow" style="margin:14px 0 6px">Offset</p>
-    <p class="mono small num" style="margin:0" id="offset">–</p>
+    <p class="mono small" style="margin:0"><span class="dot live"></span> <span id="net">Canton</span></p>
+    <p class="eyebrow" style="margin:14px 0 6px">Ledger offset</p>
+    <p class="mono small num" style="margin:0" id="offset">-</p>
   </div>
 </aside>
 
 <main>
   <div class="topbar">
-    <span class="eyebrow">Active contracts, straight from each party's participant</span>
-    <span class="right">
-      <label class="eyebrow" style="display:flex;align-items:center;gap:8px">Viewing as
-        <select id="viewAs"></select>
-      </label>
-      <label class="eyebrow" style="display:flex;align-items:center;gap:6px" title="Hide the contracts of earlier runs">
-        <input type="checkbox" id="focus" checked> this fingerprint only
-      </label>
-      <label class="eyebrow" style="display:flex;align-items:center;gap:6px">
-        <input type="checkbox" id="auto" checked> live
-      </label>
-      <span id="auth"></span>
-    </span>
+    <span class="eyebrow">Collateral collision registry on Canton</span>
+    <span class="right" id="auth"></span>
   </div>
 
-  <!-- party views -->
-  <div class="page" data-page="views">
-    <div class="pagehead">
-      <div>
-        <h1 class="h2" style="font-size:26px">Same truth, different views</h1>
-        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">
-          Each column is one <span class="mono">/v2/state/active-contracts</span> call for that
-          party. Nothing is filtered in this page: a party that is not a stakeholder never
-          receives the contract.
-        </p>
+  <!-- workspace: the sign-in, then the organisation's own space -->
+  <div class="page" data-page="workspace">
+    <div id="signin-page" class="hidden">
+      <div class="head">
+        <h1>Sign in to your organisation</h1>
+        <p class="body-muted small">Each organisation reads its own contracts from the ledger and acts in its own role.
+          The registry operator never sees a loan; a lender never sees another lender.</p>
       </div>
+      <div class="orgs" id="orgs" style="margin-top:18px"></div>
+      <form class="card f" id="signin-form" style="max-width:420px;margin-top:16px;padding:16px">
+        <label>Password<input class="f" id="pw" type="password" autocomplete="current-password" required></label>
+        <div class="row"><button class="a go" type="submit">Sign in</button>
+          <button class="a" type="button" id="guest">Explore without an account</button><span class="hint" id="signin-err"></span></div>
+        <div class="hint">No account? Explore opens the chosen organisation's workspace read-only, exactly as the ledger shows it to that organisation.</div>
+      </form>
     </div>
-    <div class="card" id="guide">
-      <div class="row" style="justify-content:space-between">
-        <span class="eyebrow">The scenario, step by step <span class="n" id="guide-hash"></span></span>
-        <span class="hint" id="guide-note"></span>
-      </div>
-      <div class="steps" id="steps" style="margin-top:12px"></div>
-    </div>
-    <div class="banner hidden" id="collision-banner">
-      <span class="dot red"></span>
-      <div>
-        <div style="font-weight:500">Collision on the ledger</div>
-        <div class="small body-muted" id="collision-detail"></div>
-      </div>
-    </div>
-    <div class="views" id="cols"></div>
+    <div id="ws" class="hidden"></div>
   </div>
 
-  <!-- collisions -->
-  <div class="page hidden" data-page="collisions">
-    <div class="pagehead">
-      <div>
-        <h1 class="h2" style="font-size:26px">Collisions</h1>
-        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">
-          A collision means a fingerprint already carried a live claim. No transfer happened and
-          each lender received its own notice. Neither learns who the other is.
-        </p>
-      </div>
+  <!-- visibility: what each organisation's node returns, counts only -->
+  <div class="page hidden" data-page="visibility">
+    <div class="head">
+      <h1>Who sees what</h1>
+      <p class="body-muted small">Active contracts held by each organisation, counted from the ledger's answer to that
+        organisation alone. A dot means the ledger never sent it a single contract of that kind. No amount, rate or
+        name appears on this page.</p>
     </div>
-    <div class="card flush">
-      <div class="card-head"><span class="eyebrow">Notices visible to the auditor</span><span class="tag" id="coll-count">0</span></div>
-      <div id="coll-table"></div>
-    </div>
-    <div class="card">
-      <p class="eyebrow">What happened</p>
-      <p class="mono small" style="margin:12px 0 0;color:var(--muted);line-height:22px">
-        draw request<br>&nbsp;&nbsp;↓<br>fingerprint check<br>&nbsp;&nbsp;↓<br>existing claim found<br>&nbsp;&nbsp;↓<br>
-        <span style="color:var(--red)">settlement refused, 0 transferred</span><br>&nbsp;&nbsp;↓<br>one notice per lender, both visible to the auditor
-      </p>
-    </div>
-  </div>
-
-  <!-- registry -->
-  <div class="page hidden" data-page="registry">
-    <div class="pagehead">
-      <div>
-        <h1 class="h2" style="font-size:26px">Registry</h1>
-        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">
-          Everything the registry party holds. Fingerprints, one index per hash, claims without
-          terms, notices. No facility.
-        </p>
-      </div>
-    </div>
-    <div class="card flush">
-      <div class="card-head"><span class="eyebrow">Fingerprints and claims</span></div>
-      <div id="reg-table"></div>
-    </div>
+    <div class="card flush"><div id="matrix"><div class="empty">Loading…</div></div></div>
+    <p class="hint">The row to read is Facility: the borrower and each lender hold their own, the registry operator and the auditor hold none.</p>
   </div>
 
   <!-- governance -->
   <div class="page hidden" data-page="governance">
-    <div class="pagehead">
-      <div>
-        <h1 class="h2" style="font-size:26px">A registry no institution controls</h1>
-        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">
-          The registry's identity is a Canton Decentralized Party. Two of three owner keys are
-          required for anything sensitive. Routine settlement runs under a delegation the members
-          granted once, by vote, and can revoke at any time.
-        </p>
-      </div>
+    <div class="head">
+      <h1>A registry no single institution controls</h1>
+      <p class="body-muted small">The registry is run jointly by three members. Day-to-day checks are automatic. Any
+        sensitive decision needs the approval of two members out of three, and the ledger itself enforces that rule.</p>
     </div>
     <div class="grid cols-2">
       <div class="card flush">
-        <div class="card-head"><span class="eyebrow">Automation, the ordinary</span><span class="tag ok" id="deleg-state">checking</span></div>
+        <div class="card-head"><span class="eyebrow">Automatic, every day</span></div>
         <table class="data">
-          <tr><td>Open the index for a fingerprint</td><td class="num" style="color:var(--green)">delegated</td></tr>
-          <tr><td>Check and settle a draw</td><td class="num" style="color:var(--green)">delegated</td></tr>
-          <tr><td>Anything else</td><td class="num body-muted">not delegated</td></tr>
+          <tr><td>Record a new collateral fingerprint</td><td class="num" style="color:var(--green)">automatic</td></tr>
+          <tr><td>Check a draw and release the funds</td><td class="num" style="color:var(--green)">automatic</td></tr>
+          <tr><td>Anything else</td><td class="num body-muted">needs approval</td></tr>
         </table>
       </div>
       <div class="card flush">
-        <div class="card-head"><span class="eyebrow">Governance, the exceptional</span><span class="tag hold">2 of 3</span></div>
+        <div class="card-head"><span class="eyebrow">Needs two members out of three</span><span class="tag hold">2 of 3</span></div>
         <table class="data">
-          <tr><td>Grant the delegation</td><td class="num" style="color:var(--accent)">vote</td></tr>
-          <tr><td>Revoke the automation</td><td class="num" style="color:var(--accent)">vote</td></tr>
-          <tr><td>Force-release a fingerprint</td><td class="num" style="color:var(--accent)">vote</td></tr>
+          <tr><td>Switch the automatic checks on</td><td class="num" style="color:var(--accent)">approval</td></tr>
+          <tr><td>Switch them off</td><td class="num" style="color:var(--accent)">approval</td></tr>
+          <tr><td>Free a collateral under dispute</td><td class="num" style="color:var(--accent)">approval</td></tr>
         </table>
       </div>
     </div>
     <div class="card">
-      <p class="eyebrow">Below the threshold, the ledger refuses</p>
-      <p class="mono small" style="margin:10px 0 0;color:var(--red)">DAML_FAILURE: The requirement 'Enough confirmations to execute action' was not met.</p>
-      <p class="small body-muted" style="margin:10px 0 0">One confirmation out of the two required. The threshold lives in the Daml GovernanceRules contract, not in any backend.</p>
-    </div>
-  </div>
-
-  <!-- proof -->
-  <div class="page hidden" data-page="proof">
-    <div class="pagehead">
-      <div>
-        <h1 class="h2" style="font-size:26px">Proof</h1>
-        <p class="body-muted small" style="margin:6px 0 0;max-width:70ch">What actually runs, and where.</p>
-      </div>
-    </div>
-    <div class="grid cols-4">
-      <div class="card stat"><div class="k">24</div><div class="l eyebrow">Scenario transactions</div></div>
-      <div class="card stat"><div class="k">6</div><div class="l eyebrow">Daml templates</div></div>
-      <div class="card stat"><div class="k">2 / 3</div><div class="l eyebrow">Registry threshold</div></div>
-      <div class="card stat"><div class="k" style="color:var(--red)">0</div><div class="l eyebrow">Colliding draws funded</div></div>
-    </div>
-    <div class="grid cols-2">
-      <div class="card flush">
-        <div class="card-head"><span class="eyebrow">LocalNet</span><span class="tag ok">verified</span></div>
-        <table class="data">
-          <tr><td>Three Canton participants</td><td class="num">yes</td></tr>
-          <tr><td>Registry as a decentralized party</td><td class="num">2 of 3</td></tr>
-          <tr><td>Governance vote executed</td><td class="num">yes</td></tr>
-          <tr><td>Below-threshold execution</td><td class="num" style="color:var(--red)">refused</td></tr>
-        </table>
-      </div>
-      <div class="card flush">
-        <div class="card-head"><span class="eyebrow">DevNet, shared HackCanton node</span><span class="tag ok">live</span></div>
-        <table class="data">
-          <tr><td>Ledger API</td><td class="num">3.5.18</td></tr>
-          <tr><td>Settled in Canton Coin</td><td class="num">yes</td></tr>
-          <tr><td>Settled in cBTC</td><td class="num">yes</td></tr>
-          <tr><td>Moved on a colliding draw</td><td class="num" style="color:var(--red)">0</td></tr>
-        </table>
-      </div>
+      <p class="eyebrow">One approval is not enough</p>
+      <p class="small" style="margin:10px 0 0">When a single member tries to act alone, the ledger rejects the
+        decision. The two-of-three rule is written into the registry's contract on Canton, so no server, operator
+        or member can bypass it.</p>
+      <details style="margin-top:10px">
+        <summary class="hint" style="cursor:pointer">Ledger response</summary>
+        <p class="mono small" style="margin:8px 0 0;color:var(--muted)">The requirement 'Enough confirmations to execute action' was not met.</p>
+      </details>
     </div>
   </div>
 </main>
 
-<dialog id="signin">
-  <form id="signin-form" method="dialog" style="display:grid;gap:12px">
-    <div style="font-weight:500">Sign in to act</div>
-    <p class="small body-muted" style="margin:0">One demo account drives every party, the way the shared DevNet node gives
-      each team one ledger user. In production each institution signs in on its own participant.</p>
-    <input class="f" id="pw" type="password" autocomplete="current-password" placeholder="Demo password" required>
-    <div class="row" style="justify-content:flex-end">
-      <button class="a" type="button" id="signin-cancel">Cancel</button>
-      <button class="a go" type="submit">Sign in</button>
-    </div>
-    <div class="hint" id="signin-err"></div>
-  </form>
-</dialog>
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-// Field order per template: what a reader should see first, and nothing we do not hold.
-const FIELDS = {
-  CollateralFingerprint: ["schemaId", "hash"],
-  Facility: ["lender", "amount", "rate", "maturity", "hash"],
-  FacilityProposal: ["lender", "amount", "rate"],
-  DrawRequest: ["lender", "hash"],
-  ClaimIndex: ["hash", "holder"],
-  Claim: ["lender", "hash", "openedAt"],
-  CollisionNotice: ["recipient", "hash", "at"],
-  RegistryDelegation: ["ops"],
-  AmuletAllocation: ["sender", "receiver", "amount"],
-  MockAllocation: ["sender", "receiver", "amount"],
-};
-// Contract fields come from the ledger, and visitors can now create contracts: escape everything.
-const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const short = (v) => esc(
-  typeof v !== "string" ? (v === null ? "none" : String(v))
-  : /^-?\d+\.\d+$/.test(v) ? Number(v).toLocaleString("en", { maximumFractionDigits: 6 })
-  : v.includes("::") ? v.split("::")[0].replace(/^[0-9a-f]{8}-/, "")
-  : /^[0-9a-f]{40,}$/.test(v) ? v.slice(0, 8) + "…" + v.slice(-4)
-  : v.length > 26 ? v.slice(0, 22) + "…" : v);
-
-let cfg = { parties: [] }, parties = [], selected = "", seen = new Set(), first = true;
-let signedIn = false, byParty = {}, balances = {}, inPlay = "";
 const SCHEMA = "receivables-pool-v1";
+let cfg = { orgs: [] }, org = null, guest = false, data = { contracts: [] }, balance = null, picked = null;
 
-const post = async (p, b) => {
-  const r = await fetch(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
-  if (!r.ok) throw new Error((await r.text()).slice(0, 160));
-  return r.json();
-};
+const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const labelOf = (party) => cfg.orgs.find((o) => o.party === party)?.label ?? String(party).split("::")[0];
+const fp = (h) => `<span class="hash" title="${esc(h)}">${esc(String(h).slice(0, 10))}…${esc(String(h).slice(-4))}</span>`;
+const num = (v) => Number(v).toLocaleString("en", { maximumFractionDigits: 4 });
+const pct = (v) => `${(Number(v) * 100).toLocaleString("en", { maximumFractionDigits: 3 })}%`;
+const day = (v) => esc(String(v ?? "").slice(0, 10));
+const when = (v) => esc(String(v ?? "").replace("T", " ").slice(0, 16));
+const of = (t) => data.contracts.filter((c) => (t instanceof RegExp ? t.test(c.t) : c.t === t));
+const orgOf = (key) => cfg.orgs.find((o) => o.key === key);
+const MONEY = ["ORIGINATOR", "LENDER_A", "LENDER_B"];
 
-async function acs(party, offset) {
-  const rows = await post("/api/v2/state/active-contracts", {
-    activeAtOffset: offset, verbose: false,
-    eventFormat: { filtersByParty: { [party]: { cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } }] } }, verbose: false },
-  });
-  return rows.map((r) => r.contractEntry?.JsActiveContract?.createdEvent).filter(Boolean)
-    .filter((c) => c.templateId.includes("PledgeGuard") || /Allocation$/.test(c.templateId.split(":").pop()))
-    .map((c) => {
-      const a = c.createArgument ?? {};
-      // a token-standard allocation nests its leg; show its amount like any other field
-      const leg = a.allocation?.transferLeg;
-      return { t: c.templateId.split(":").pop(), a: leg ? { amount: leg.amount, sender: leg.sender, receiver: leg.receiver } : a, cid: c.contractId };
-    });
-}
+async function getJson(p) { const r = await fetch(p); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? r.statusText); return r.json(); }
 
-// ---- actions
 function toast(kind, title, detail) {
   const el = document.createElement("div");
   el.className = `toast ${kind}`;
@@ -383,15 +214,14 @@ function toast(kind, title, detail) {
 }
 
 async function act(name, body, button, label) {
-  if (!signedIn) return document.getElementById("signin").showModal();
   const old = button?.textContent;
-  if (button) { button.disabled = true; button.textContent = "On the ledger…"; }
+  if (button) { button.disabled = true; button.textContent = "Submitting…"; }
   try {
     const r = await fetch(`/act/${name}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json();
-    if (r.status === 401) { signedIn = false; renderAuth(); }
+    if (r.status === 401) { org = null; return render(); }
     if (!r.ok) throw new Error(j.error ?? r.statusText);
-    toast("ok", label, `update ${j.updateId.slice(0, 18)}…  offset ${j.offset}`);
+    toast("ok", label, `ledger update ${j.updateId.slice(0, 18)}…  offset ${j.offset}`);
     refresh(); // not awaited: the caller can update its form right away
     return j;
   } catch (e) {
@@ -401,272 +231,256 @@ async function act(name, body, button, label) {
   }
 }
 
-// The originator hands the fingerprint to its lenders off-ledger; in this one-browser demo that is sessionStorage.
-const lastHash = () => { try { return sessionStorage.getItem("pg.hash") ?? ""; } catch { return ""; } };
-const keepHash = (h) => { try { sessionStorage.setItem("pg.hash", h); } catch { /* private mode */ } };
-const sha256 = async (text) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
-const normalise = (f) => `${SCHEMA}|contract=${f.contract.trim().toUpperCase()}|debtor=${f.debtor.trim().toLowerCase()}|nominal=${Number(f.nominal)}|origination=${f.origination}`;
+// ---- building blocks
+const table = (title, head, rows, opts = {}) => `<div class="card flush">
+  <div class="card-head"><span class="eyebrow">${esc(title)}</span><span class="tag${opts.tag ?? ""}">${rows.length}</span></div>
+  ${rows.length ? `<table class="data"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map((r) => `<tr${opts.alert ? ' class="alert"' : ""}>${r.map((c, i) => `<td${i === r.length - 1 && opts.action ? ' class="act"' : ""}>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+  : `<div class="empty">${esc(opts.empty ?? "Nothing here.")}</div>`}</div>`;
+const btn = (op, cidv, label, cls = "") => guest ? "" : `<button class="a ${cls}" data-op="${op}" data-cid="${esc(cidv)}">${esc(label)}</button>`;
 
-// Forms live in the column head and are built once, so a refresh never wipes what is being typed.
-function actionsFor(p) {
-  if (!cfg.writable || !signedIn) return "";
-  if (p.key === "ORIGINATOR") {
-    const ref = `RP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    return `<details class="acts" open><summary>Register a collateral file</summary>
-      <form data-form="fingerprint">
-        <label>Contract number<input class="f" name="contract" value="${ref}" required></label>
-        <label>Debtor<input class="f" name="debtor" value="Acme Auto Finance" required></label>
-        <div class="row"><label style="flex:1">Nominal<input class="f" name="nominal" type="number" min="1" value="1250000" required></label>
-          <label style="flex:1">Origination<input class="f" name="origination" type="date" value="2026-09-01" required></label></div>
-        <div class="hint">sha256 of the normalised fields, computed in this browser. The file itself never leaves.</div>
+// Forms are built once per sign-in; tables are repainted only when their content changes,
+// so nothing being typed is ever wiped by the refresh.
+function forms() {
+  if (guest) return `<div class="card"><p class="eyebrow">Read-only view</p><p class="small body-muted" style="margin:10px 0 0">You are seeing
+    exactly what the ledger shows the ${esc(orgOf(org).label.toLowerCase())}, and nothing it does not. Sign in with this organisation's account to act.</p>
+    <div class="row" style="margin-top:12px"><button class="a go" id="to-signin">Sign in to act</button></div></div>`;
+  if (org === "ORIGINATOR") {
+    return `<div class="card flush"><div class="card-head"><span class="eyebrow">Register a collateral file</span></div>
+      <form class="f" data-form="fingerprint">
+        <div class="row"><label>Contract number<input class="f" name="contract" value="RP-2026-${Math.floor(1000 + Math.random() * 9000)}" required></label>
+          <label>Debtor<input class="f" name="debtor" value="Acme Auto Finance" required></label></div>
+        <div class="row"><label>Nominal<input class="f" name="nominal" type="number" min="1" value="1250000" required></label>
+          <label>Origination<input class="f" name="origination" type="date" value="2026-09-01" required></label></div>
+        <div class="hint">The fingerprint is a sha256 of these normalised fields, computed in your browser. The file itself never leaves your systems.</div>
         <div class="hint" data-preview></div>
         <div class="row"><button class="a go" type="submit">Register fingerprint</button></div>
-      </form></details>`;
+        <div class="hint" data-share></div>
+      </form></div>`;
   }
-  if (p.key === "LENDER_A" || p.key === "LENDER_B") {
-    const fund = cfg.instrument === "amulet" ? `<button class="a" type="button" data-fund="${p.key}">Fund ${Math.min(50, cfg.maxFund)} ${cfg.unit}</button>` : "";
-    return `<div class="acts"><div class="row" style="justify-content:space-between"><span class="bal" data-bal="${p.key}">balance…</span>${fund}</div>
-      <details style="margin-top:10px"><summary>Propose a facility</summary>
-      <form data-form="propose" data-lender="${p.key}">
-        <label>Collateral fingerprint, received from the originator<input class="f" name="hash" pattern="[0-9a-f]{64}" placeholder="sha256" value="${esc(lastHash())}" required></label>
-        <div class="row"><label style="flex:1">Amount (notional)<input class="f" name="amount" type="number" min="1" value="${p.key === "LENDER_A" ? 1000000 : 750000}" required></label>
-          <label style="flex:1">Rate<input class="f" name="rate" type="number" step="0.001" min="0.001" max="1" value="${p.key === "LENDER_A" ? 0.085 : 0.091}" required></label></div>
-        <label>Maturity<input class="f" name="maturity" type="date" value="2027-04-01" required></label>
-        <div class="row"><button class="a go" type="submit">Propose to the originator</button></div>
-      </form></details></div>`;
+  if (org === "LENDER_A" || org === "LENDER_B") {
+    return `<div class="card flush"><div class="card-head"><span class="eyebrow">Propose a facility to the borrower</span></div>
+      <form class="f" data-form="propose">
+        <label>Collateral fingerprint, as shared by the borrower<input class="f" name="hash" pattern="[0-9a-f]{64}" placeholder="64 hex characters" required></label>
+        <div class="row"><label>Amount<input class="f" name="amount" type="number" min="1" value="${org === "LENDER_A" ? 1000000 : 750000}" required></label>
+          <label>Rate<input class="f" name="rate" type="number" step="0.001" min="0.001" max="1" value="${org === "LENDER_A" ? 0.085 : 0.091}" required></label>
+          <label>Maturity<input class="f" name="maturity" type="date" value="2027-04-01" required></label></div>
+        <div class="row"><button class="a go" type="submit">Send proposal</button></div>
+      </form></div>`;
   }
-  if (p.key === "REGISTRY") {
-    return `<div class="acts"><div class="hint">The registry automation opens indexes and settles draws on its own, under the delegation below.
-      On DevNet the registry is one party; on LocalNet granting and revoking are 2-of-3 votes.</div>
-      <div class="row" style="margin-top:8px" data-deleg></div></div>`;
-  }
+  if (org === "REGISTRY") return `<div class="card flush" data-deleg></div>`;
   return "";
 }
 
-// Buttons on the cards: what this party may do with this contract.
-function opsFor(p, c) {
-  if (!cfg.writable || !signedIn) return "";
-  const L = p.key;
-  if (p.key === "ORIGINATOR" && c.t === "FacilityProposal") return `<button class="a go" data-op="accept" data-cid="${esc(c.cid)}">Accept</button>`;
-  if (L === "LENDER_A" || L === "LENDER_B") {
-    if (c.t === "Facility") return `<input class="f" type="number" min="0.0001" max="${cfg.maxDraw}" step="any" value="${L === "LENDER_A" ? 5 : 4}" data-amount aria-label="draw amount">
-      <span class="hint">${esc(cfg.unit)}</span><button class="a go" data-op="draw" data-lender="${L}" data-cid="${esc(c.cid)}">Draw</button>`;
-    if (c.t === "Claim") return `<button class="a" data-op="release" data-lender="${L}" data-cid="${esc(c.cid)}">Repay and release</button>`;
-    if (c.t === "DrawRequest") return `<span class="hint">waiting for the registry</span><button class="a" data-op="cancel" data-lender="${L}" data-cid="${esc(c.cid)}">Cancel</button>`;
-    if (/Allocation$/.test(c.t)) return `<button class="a" data-op="unlock" data-lender="${L}" data-cid="${esc(c.cid)}">Withdraw funds</button>`;
-  }
-  return "";
+function tables() {
+  const unit = cfg.unit;
+  if (org === "ORIGINATOR") return [
+    table("Facility proposals to review", ["Lender", "Amount", "Rate", "Maturity", "Fingerprint", ""],
+      of("FacilityProposal").map((c) => [esc(labelOf(c.a.lender)), num(c.a.amount), pct(c.a.rate), day(c.a.maturity), fp(c.a.hash), btn("accept", c.cid, "Accept", "go")]),
+      { action: true, empty: "No proposal waiting." }),
+    table("Facilities", ["Lender", "Amount", "Rate", "Maturity", "Fingerprint"],
+      of("Facility").map((c) => [esc(labelOf(c.a.lender)), num(c.a.amount), pct(c.a.rate), day(c.a.maturity), fp(c.a.hash)]), { empty: "No signed facility yet." }),
+    table("Fingerprints sent to the registry", ["Schema", "Fingerprint", "Status"],
+      of("CollateralFingerprint").map((c) => [esc(c.a.schemaId), fp(c.a.hash), `<span class="body-muted">not indexed</span>`]),
+      { empty: "Every fingerprint you registered is indexed by the registry." }),
+  ];
+  if (org === "LENDER_A" || org === "LENDER_B") return [
+    table("Double-pledge alerts", ["Fingerprint", "Detected", "What happened"],
+      of("CollisionNotice").map((c) => [fp(c.a.hash), when(c.a.at), "Two draws met on the same collateral. The second was stopped, no funds moved."]),
+      { alert: true, tag: " bad", empty: "No alert." }),
+    table("Facilities", ["Amount", "Rate", "Maturity", "Fingerprint", `Draw (${esc(unit)})`],
+      of("Facility").map((c) => [num(c.a.amount), pct(c.a.rate), day(c.a.maturity), fp(c.a.hash),
+        guest ? "" : `<input class="f small" type="number" min="0.0001" max="${cfg.maxDraw}" step="any" value="${org === "LENDER_A" ? 5 : 4}" data-amount aria-label="draw amount"> ${btn("draw", c.cid, "Draw", "go")}`]),
+      { action: true, empty: "No signed facility yet." }),
+    table("Live pledges", ["Fingerprint", "Since", ""],
+      of("Claim").map((c) => [fp(c.a.hash), when(c.a.openedAt), btn("release", c.cid, "Repaid, release")]), { action: true, empty: "No live pledge." }),
+    table("Draws under check", ["Fingerprint", ""],
+      of("DrawRequest").map((c) => [fp(c.a.hash), btn("cancel", c.cid, "Cancel")]), { action: true, empty: "No draw waiting for the registry." }),
+    table("Funds reserved for a draw", ["Amount", "Payee", ""],
+      of(/Allocation$/).map((c) => [`${num(c.a.amount)} ${esc(unit)}`, esc(labelOf(c.a.receiver)), btn("unlock", c.cid, "Release funds")]),
+      { action: true, empty: "No funds reserved." }),
+    table("Proposals sent", ["Amount", "Rate", "Maturity", "Fingerprint"],
+      of("FacilityProposal").map((c) => [num(c.a.amount), pct(c.a.rate), day(c.a.maturity), fp(c.a.hash)]), { empty: "No proposal pending." }),
+  ];
+  if (org === "REGISTRY") return [
+    table("Collateral index", ["Fingerprint", "Status", "Pledged to"],
+      of("ClaimIndex").map((c) => [fp(c.a.hash), c.a.holder ? `<span style="color:var(--accent)">pledged</span>` : `<span class="body-muted">free</span>`, c.a.holder ? esc(labelOf(c.a.holder)) : "-"]),
+      { empty: "No fingerprint indexed yet." }),
+    table("Double pledges stopped", ["Fingerprint", "Notified", "Detected"],
+      of("CollisionNotice").map((c) => [fp(c.a.hash), esc(labelOf(c.a.recipient)), when(c.a.at)]), { alert: true, tag: " bad", empty: "None." }),
+    table("Draws under check", ["Fingerprint", "Lender"], of("DrawRequest").map((c) => [fp(c.a.hash), esc(labelOf(c.a.lender))]), { empty: "Queue empty." }),
+    table("Fingerprints received", ["Schema", "Fingerprint", "Status"],
+      of("CollateralFingerprint").map((c) => [esc(c.a.schemaId), fp(c.a.hash), `<span class="body-muted">${of("ClaimIndex").some((i) => i.a.hash === c.a.hash) ? "already indexed, ignored" : "being indexed"}</span>`]),
+      { empty: "Nothing pending." }),
+  ];
+  if (org === "AUDITOR") return [
+    table("Double pledges stopped", ["Fingerprint", "Notified lender", "Detected", "Loan terms"],
+      of("CollisionNotice").map((c) => [fp(c.a.hash), esc(labelOf(c.a.recipient)), when(c.a.at), `<span class="redacted">not disclosed</span>`]),
+      { alert: true, tag: " bad", empty: "No double pledge so far." }),
+  ];
+  return [];
 }
 
-const card = (p) => ({ t, a, cid }) => {
-  const keys = (FIELDS[t] ?? Object.keys(a)).filter((k) => a[k] !== undefined);
-  const isNew = !first && !seen.has(cid);
-  seen.add(cid);
-  const ops = opsFor(p, { t, a, cid });
-  return `<div class="c ${esc(t)}${isNew ? " new" : ""}"><div class="t">${esc(t)}</div>
-    <dl>${keys.map((k) => `<dt>${esc(k)}</dt><dd>${short(a[k])}</dd>`).join("")}</dl>${ops ? `<div class="ops">${ops}</div>` : ""}</div>`;
-};
-
-const rowsTable = (head, rows) => rows.length
-  ? `<table class="data"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
-     <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`
-  : `<div class="view"><div class="empty">nothing yet</div></div>`;
-
-// Column skeletons: rebuilt only when the selection or the sign-in state changes.
-function buildColumns() {
-  const shown = selected ? parties.filter((p) => p.name === selected) : parties.filter((p) => p.name !== "Auditor");
-  document.getElementById("cols").innerHTML = shown.map((p) => `<section class="view ${p.name.toLowerCase().replace(/\s/g, "")}" data-party="${p.key}">
-      <header><span><span class="who">${esc(p.name)}</span><span class="role">${esc(p.role)}</span></span>
-      <span class="tag" data-count>0</span></header>${actionsFor(p)}<div data-list></div></section>`).join("");
-  first = true;
-  paint();
+function paintDeleg() {
+  const el = document.querySelector("[data-deleg]");
+  if (!el) return;
+  const d = of("RegistryDelegation");
+  const html = `<div class="card-head"><span class="eyebrow">Automation</span>${d.length ? '<span class="tag ok">delegated</span>' : '<span class="tag bad">stopped</span>'}</div>
+    <div class="card-body"><p class="small body-muted" style="margin:0">${d.length
+      ? "The registry automation opens one index per fingerprint and checks every draw. Revoking it stops all draws until a new delegation is granted."
+      : "No delegation: every draw waits. On the decentralized registry, granting is a 2 of 3 vote."}</p>
+    <div class="row" style="margin-top:12px">${d.length ? d.map((x) => btn("revoke", x.cid, "Revoke delegation", "warn")).join("") : btn("grant", "", "Grant delegation", "go")}</div></div>`;
+  if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
 }
 
 function paint() {
-  for (const col of document.querySelectorAll("#cols [data-party]")) {
-    const p = parties.find((x) => x.key === col.dataset.party), h = currentHash();
-    const all = byParty[p.name];
-    // contracts without a hash (allocations, the delegation) always show
-    const focus = Array.isArray(all) && document.getElementById("focus").checked;
-    // contracts without a hash (allocations, the delegation) always show; test mocks only on a mock instance
-    const cs = focus ? all.filter((c) => (c.a.hash === undefined || !h || c.a.hash === h) && (cfg.instrument === "mock" || !c.t.startsWith("Mock"))) : all;
-    const html = cs?.error ? `<div class="err">${esc(cs.error)}</div>`
-      : cs?.length ? `<div class="list">${cs.map(card(p)).join("")}</div>`
-      : `<div class="empty">empty: not a stakeholder of anything here</div>`;
-    const list = col.querySelector("[data-list]");
-    if (list.dataset.html !== html) { list.innerHTML = html; list.dataset.html = html; } // keep typed values when nothing changed
-    col.querySelector("[data-count]").textContent = cs?.length ?? 0;
-    const bal = col.querySelector("[data-bal]");
-    if (bal) bal.textContent = balances[p.key] === undefined ? "balance…" : `holds ${Number(balances[p.key]).toLocaleString("en", { maximumFractionDigits: 4 })} ${cfg.unit}`;
-    const deleg = col.querySelector("[data-deleg]");
-    if (deleg) {
-      const d = (cs ?? []).filter((c) => c.t === "RegistryDelegation");
-      const html2 = d.length ? `<span class="tag ok">delegation active</span>${d.map((x) => `<button class="a warn" data-op="revoke" data-cid="${esc(x.cid)}">Revoke</button>`).join("")}`
-        : `<span class="tag bad">no delegation: draws wait</span><button class="a go" data-op="grant">Grant delegation</button>`;
-      if (deleg.dataset.html !== html2) { deleg.innerHTML = html2; deleg.dataset.html = html2; }
-    }
-  }
-  first = false;
+  const holder = document.getElementById("tables");
+  if (!holder) return;
+  const cards = tables();
+  // repaint card by card, only when it changed
+  if (holder.children.length !== cards.length) holder.innerHTML = cards.map(() => "<div></div>").join("");
+  cards.forEach((html, i) => { const slot = holder.children[i]; if (slot.dataset.html !== html) { slot.innerHTML = html; slot.dataset.html = html; } });
+  paintDeleg();
+  const b = document.getElementById("balance");
+  if (b && balance !== null) b.textContent = `${num(balance)} ${cfg.unit}`;
 }
 
-// ---- the guided scenario, read from the ledger state of the fingerprint in play
-const of = (name) => Array.isArray(byParty[name]) ? byParty[name] : [];
-// The fingerprint in play: the one this browser registered, else the latest the originator holds.
-const currentHash = () => lastHash() || inPlay || of("Originator").filter((c) => c.t === "CollateralFingerprint").at(-1)?.a.hash || "";
-
-function guide() {
-  const fps = of("Originator").filter((c) => c.t === "CollateralFingerprint");
-  const indexes = of("Registry").filter((c) => c.t === "ClaimIndex");
-  const h = currentHash();
-  const on = (c) => c.a.hash === h;
-  const facs = of("Originator").filter((c) => c.t === "Facility" && on(c));
-  const has = (name, t) => of(name).some((c) => c.t === t && on(c));
-  const s = [
-    ["Register the collateral", "Originator: fill the form, the hash is computed here", indexes.some(on)],
-    ["Two lenders, two facilities", "Each lender proposes with the hash, the originator accepts", facs.length >= 2],
-    ["Lender A draws", "Draw on A's facility: real coin moves, a claim is opened", has("Lender A", "Claim") || has("Lender B", "Claim")],
-    ["The same file, again", "Optional: register the same fields a second time, the registry ignores it", fps.some(on) && indexes.some(on)],
-    ["Lender B draws the same collateral", "Refused atomically: no transfer, one notice per lender", has("Lender B", "CollisionNotice"), true],
-    ["A repays, B retries", "Repay on A's claim, withdraw B's stuck funds, draw again", has("Lender B", "Claim")],
-  ];
-  const next = s.findIndex(([, , done], i) => !done && i !== 3);
-  document.getElementById("steps").innerHTML = s.map(([w, hint, done, isBad], i) =>
-    `<div class="step${done ? " done" : ""}${i === next ? " next" : ""}${isBad ? " bad" : ""}"><div class="n">${done ? "✓" : i + 1} ${i === next ? "next" : ""}</div>
-      <div class="w">${esc(w)}</div><div class="h">${esc(hint)}</div></div>`).join("");
-  document.getElementById("guide-hash").textContent = h ? `· fingerprint ${h.slice(0, 8)}…` : "";
-  document.getElementById("guide-note").textContent = !cfg.writable ? "read-only instance" : signedIn ? "" : "sign in to play it";
-}
-
-async function refresh() {
-  let offset;
-  try {
-    ({ offset } = await (await fetch("/api/v2/state/ledger-end")).json());
-  } catch (e) { document.getElementById("net").textContent = "unreachable"; return; }
-  document.getElementById("offset").textContent = offset;
-
-  const next = {};
-  await Promise.all(parties.map(async (p) => { try { next[p.name] = await acs(p.party, offset); } catch (e) { next[p.name] = { error: e.message }; } }));
-  byParty = next;
-  try { ({ balances, hash: inPlay } = await (await fetch("/state")).json()); } catch { /* balances are a convenience */ }
+function workspace() {
+  const o = orgOf(org);
+  const topUp = !guest && cfg.instrument === "amulet" && org !== "ORIGINATOR"
+    ? `<button class="a" data-op="fund">Top up ${Math.min(50, cfg.maxFund)} ${esc(cfg.unit)} from treasury</button>` : "";
+  const side = forms();
+  document.getElementById("ws").innerHTML = `
+    <div class="head row" style="justify-content:space-between;align-items:flex-end">
+      <div><h1>${esc(o.label)}</h1><p class="body-muted small">${esc(o.blurb)}</p></div>
+      ${MONEY.includes(org) ? `<div style="text-align:right"><div class="eyebrow">Balance</div><div class="bal" id="balance">…</div><div style="margin-top:8px">${topUp}</div></div>` : ""}
+    </div>
+    <div class="cols" style="margin-top:18px">${side ? `<div>${side}</div>` : ""}<div id="tables" style="display:grid;gap:16px"></div></div>`;
   paint();
-  guide();
-
-  // counters and the collision banner
-  const notices = (byParty["Auditor"] ?? []).filter((c) => c.t === "CollisionNotice");
-  document.getElementById("n-views").textContent = parties.length;
-  document.getElementById("n-coll").textContent = notices.length || "";
-  document.getElementById("n-reg").textContent = (byParty["Registry"] ?? []).length || "";
-  document.getElementById("net").textContent = "DevNet, hackcanton-devnet-3";
-
-  const banner = document.getElementById("collision-banner");
-  banner.classList.toggle("hidden", notices.length === 0);
-  if (notices.length) {
-    const h = notices[notices.length - 1].a.hash;
-    document.getElementById("collision-detail").textContent =
-      `fingerprint ${String(h).slice(0, 8)}… carried a live claim. ${notices.length} notice(s), 0 transferred, counterparties not disclosed.`;
-  }
-
-  document.getElementById("coll-count").textContent = notices.length;
-  document.getElementById("coll-table").innerHTML = rowsTable(
-    ["Fingerprint", "Notified lender", "At", "Underlying facility"],
-    notices.map((n) => [`<span style="color:var(--accent)">${short(n.a.hash)}</span>`, short(n.a.recipient),
-      esc(String(n.a.at ?? "").replace("T", " ").slice(0, 19)), `<span class="redacted">not available</span>`]));
-
-  const reg = Array.isArray(byParty["Registry"]) ? byParty["Registry"] : [];
-  document.getElementById("reg-table").innerHTML = rowsTable(
-    ["Contract", "Fingerprint", "Holder or recipient", "Terms"],
-    reg.map((c) => [esc(c.t), c.a.hash ? `<span style="color:var(--accent)">${short(c.a.hash)}</span>` : "-",
-      short(c.a.holder ?? c.a.lender ?? c.a.recipient ?? c.a.ops ?? null), `<span class="redacted">never held</span>`]));
-
-  const deleg = reg.some((c) => c.t === "RegistryDelegation");
-  const d = document.getElementById("deleg-state");
-  d.textContent = deleg ? "enabled" : "revoked";
-  d.className = "tag " + (deleg ? "ok" : "bad");
 }
 
 // ---- sign-in
-function renderAuth() {
-  const el = document.getElementById("auth");
-  el.innerHTML = !cfg.writable ? `<span class="tag">read-only</span>`
-    : signedIn ? `<span class="tag ok">signed in</span> <button class="a" id="signout">Sign out</button>`
-    : `<button class="a go" id="signin-open">Sign in to act</button>`;
-  buildColumns();
-  guide();
+function render() {
+  const o = org && orgOf(org);
+  document.getElementById("signin-page").classList.toggle("hidden", Boolean(o));
+  document.getElementById("ws").classList.toggle("hidden", !o);
+  document.getElementById("org-card").classList.toggle("hidden", !o);
+  document.getElementById("nav-workspace").textContent = o ? "Workspace" : "Sign in";
+  document.getElementById("auth").innerHTML = !o ? ""
+    : guest ? `<span class="tag hold">read-only</span> <span class="small body-muted">${esc(o.label)}</span> <button class="a" id="signout">Leave</button>`
+    : `<span class="small body-muted">${esc(o.label)}</span> <button class="a" id="signout">Sign out</button>`;
+  if (o) {
+    document.getElementById("org-label").textContent = o.label;
+    document.getElementById("org-blurb").textContent = o.blurb;
+    data = { contracts: [] }; balance = null;
+    workspace();
+    refresh();
+  } else {
+    document.getElementById("orgs").innerHTML = cfg.orgs.map((x) =>
+      `<button type="button" class="orgpick" data-pick="${x.key}" aria-pressed="${picked === x.key}"><div class="l">${esc(x.label)}</div><div class="b">${esc(x.blurb)}</div></button>`).join("");
+    if (!cfg.signIn) document.getElementById("signin-err").textContent = "Sign-in is not configured on this instance.";
+  }
 }
 
+async function refresh() {
+  if (org) {
+    try {
+      data = await getJson("/me/contracts");
+      document.getElementById("offset").textContent = data.offset;
+      if (MONEY.includes(org)) ({ balance } = await getJson("/me/balance"));
+      paint();
+    } catch (e) { if (/sign in/.test(e.message)) { org = null; render(); } }
+  }
+  if (!document.querySelector('[data-page="visibility"]').classList.contains("hidden")) matrix();
+}
+
+async function matrix() {
+  try {
+    const rows = await getJson("/visibility");
+    const kinds = ["CollateralFingerprint", "FacilityProposal", "Facility", "DrawRequest", "Allocation", "ClaimIndex", "Claim", "CollisionNotice", "RegistryDelegation"];
+    document.getElementById("matrix").innerHTML = `<table class="data matrix"><thead><tr><th>Contract</th>${rows.map((r) => `<th>${esc(r.label)}</th>`).join("")}</tr></thead>
+      <tbody>${kinds.map((k) => `<tr><td>${k}</td>${rows.map((r) => r.counts[k] ? `<td>${r.counts[k]}</td>` : `<td class="none">·</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  } catch (e) { document.getElementById("matrix").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+// ---- events
+const sha256 = async (text) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const normalise = (f) => `${SCHEMA}|contract=${f.contract.trim().toUpperCase()}|debtor=${f.debtor.trim().toLowerCase()}|nominal=${Number(f.nominal)}|origination=${f.origination}`;
+
 document.addEventListener("click", async (e) => {
+  const pick = e.target.closest("[data-pick]");
+  if (pick) { picked = pick.dataset.pick; document.querySelectorAll("[data-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b === pick))); return document.getElementById("pw").focus(); }
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.id === "signin-open") return document.getElementById("signin").showModal();
-  if (b.id === "signin-cancel") return document.getElementById("signin").close();
-  if (b.id === "signout") { await post("/auth/logout", {}); signedIn = false; return renderAuth(); }
-  if (b.dataset.fund) return act("fund", { lender: b.dataset.fund, amount: String(Math.min(50, cfg.maxFund)) }, b, `${b.dataset.fund === "LENDER_A" ? "Lender A" : "Lender B"} funded`);
-  const op = b.dataset.op, c = b.dataset.cid, L = b.dataset.lender;
-  if (op === "accept") return act("accept", { proposalCid: c }, b, "Facility signed by both sides");
-  if (op === "draw") {
-    const amount = b.closest(".ops").querySelector("[data-amount]").value;
-    return act("draw", { lender: L, facilityCid: c, amount }, b, `Draw of ${amount} ${cfg.unit} sent to the registry check`);
+  if (b.id === "signout" || b.id === "to-signin") {
+    picked = org; // back on the sign-in screen with the same organisation selected
+    await fetch("/auth/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    org = null; guest = false; return render();
   }
-  if (op === "release") return act("release", { lender: L, claimCid: c }, b, "Repaid: the fingerprint is free again");
-  if (op === "cancel") return act("cancel", { lender: L, drawCid: c }, b, "Draw request cancelled");
-  if (op === "unlock") return act("unlock", { lender: L, allocationCid: c }, b, "Allocation withdrawn, funds back to the lender");
+  if (b.id === "guest") {
+    const err = document.getElementById("signin-err");
+    if (!picked) { err.textContent = "Choose an organisation first."; return; }
+    const r = await fetch("/auth/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ org: picked }) });
+    const j = await r.json();
+    if (!r.ok) { err.textContent = j.error; return; }
+    err.textContent = ""; org = j.org; guest = true; return render();
+  }
+  if (b.dataset.copy) { await navigator.clipboard?.writeText(b.dataset.copy); return toast("ok", "Fingerprint copied"); }
+  const op = b.dataset.op, c = b.dataset.cid;
+  if (op === "accept") return act("accept", { proposalCid: c }, b, "Facility signed");
+  if (op === "draw") { const amount = b.closest("td").querySelector("[data-amount]").value; return act("draw", { facilityCid: c, amount }, b, `Draw of ${amount} ${cfg.unit} submitted to the registry check`); }
+  if (op === "release") return act("release", { claimCid: c }, b, "Pledge released: the collateral is free again");
+  if (op === "cancel") return act("cancel", { drawCid: c }, b, "Draw cancelled");
+  if (op === "unlock") return act("unlock", { allocationCid: c }, b, "Reserved funds released");
+  if (op === "fund") return act("fund", { amount: String(Math.min(50, cfg.maxFund)) }, b, "Treasury top-up received");
   if (op === "grant") return act("grant", {}, b, "Delegation granted to the registry automation");
   if (op === "revoke") return act("revoke", { delegationCid: c }, b, "Delegation revoked: draws now wait");
 });
 
 document.addEventListener("input", async (e) => {
   const f = e.target.closest('form[data-form="fingerprint"]');
-  if (f) f.querySelector("[data-preview]").textContent = `hash ${(await sha256(normalise(Object.fromEntries(new FormData(f))))).slice(0, 16)}…`;
+  if (f) f.querySelector("[data-preview]").textContent = `fingerprint ${(await sha256(normalise(Object.fromEntries(new FormData(f))))).slice(0, 16)}…`;
 });
 
 document.addEventListener("submit", async (e) => {
   const f = e.target;
-  if (f.id === "signin-form") {
-    e.preventDefault();
-    const r = await fetch("/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: document.getElementById("pw").value }) });
-    const j = await r.json();
-    if (!r.ok) { document.getElementById("signin-err").textContent = j.error; return; }
-    document.getElementById("pw").value = "";
-    document.getElementById("signin-err").textContent = "";
-    document.getElementById("signin").close();
-    signedIn = true;
-    return renderAuth();
-  }
-  if (!f.dataset.form) return;
   e.preventDefault();
+  if (f.id === "signin-form") {
+    const err = document.getElementById("signin-err");
+    if (!picked) { err.textContent = "Choose your organisation first."; return; }
+    const r = await fetch("/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ org: picked, password: document.getElementById("pw").value }) });
+    const j = await r.json();
+    if (!r.ok) { err.textContent = j.error; return; }
+    document.getElementById("pw").value = ""; err.textContent = "";
+    org = j.org; guest = false;
+    return render();
+  }
   const v = Object.fromEntries(new FormData(f));
   const button = f.querySelector('button[type="submit"]');
   if (f.dataset.form === "fingerprint") {
     const hash = await sha256(normalise(v));
-    const r = await act("fingerprint", { schemaId: SCHEMA, hash }, button, "Fingerprint registered, the registry opens its index");
-    if (r) {
-      keepHash(hash);
-      for (const input of document.querySelectorAll('form[data-form="propose"] [name="hash"]')) input.value = hash;
+    if (await act("fingerprint", { schemaId: SCHEMA, hash }, button, "Fingerprint registered with the registry")) {
+      f.querySelector("[data-share]").innerHTML = `Share with your lenders: <span class="mono" style="color:var(--accent);overflow-wrap:anywhere" data-hash>${hash}</span>
+        <button class="a" type="button" data-copy="${hash}" style="margin-left:6px">Copy</button>`;
     }
   }
-  if (f.dataset.form === "propose") {
-    await act("propose", { lender: f.dataset.lender, schemaId: SCHEMA, hash: v.hash, amount: v.amount, rate: v.rate, maturity: v.maturity }, button, "Facility proposed to the originator");
-  }
+  if (f.dataset.form === "propose") await act("propose", { schemaId: SCHEMA, hash: v.hash.trim(), amount: v.amount, rate: v.rate, maturity: v.maturity }, button, "Facility proposed to the borrower");
 });
 
-document.getElementById("focus").onchange = () => paint();
-
-document.querySelectorAll("a.nav").forEach((a) => a.addEventListener("click", (e) => {
-  e.preventDefault();
-  document.querySelectorAll("a.nav").forEach((x) => x.setAttribute("aria-current", String(x === a)));
-  document.querySelectorAll(".page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== a.dataset.tab));
-}));
+function go(tab) {
+  document.querySelectorAll("a.nav").forEach((x) => x.setAttribute("aria-current", String(x.dataset.tab === tab)));
+  document.querySelectorAll(".page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== tab));
+  if (tab === "visibility") matrix();
+}
+document.querySelectorAll("a.nav").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); history.replaceState(null, "", `#${a.dataset.tab}`); go(a.dataset.tab); }));
 
 (async () => {
-  cfg = await (await fetch("/config")).json();
-  parties = cfg.parties;
-  signedIn = (await (await fetch("/auth/me")).json()).signedIn;
-  const sel = document.getElementById("viewAs");
-  sel.innerHTML = `<option value="">All but the auditor</option>` + parties.map((p) => `<option>${esc(p.name)}</option>`).join("");
-  sel.onchange = () => { selected = sel.value; buildColumns(); };
-  renderAuth();
-  await refresh();
-  setInterval(() => document.getElementById("auto").checked && refresh(), 4000);
+  cfg = await getJson("/config");
+  document.getElementById("net").textContent = cfg.network;
+  ({ org, guest } = await getJson("/auth/me"));
+  render();
+  go(["visibility", "governance"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "workspace");
+  setInterval(refresh, 5000);
 })();
 </script>
 </html>

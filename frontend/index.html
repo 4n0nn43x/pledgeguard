@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PledgeGuard, live party views</title>
+<title>PledgeGuard dashboard</title>
 <link rel="icon" href="favicon.png">
 <link rel="stylesheet" href="pledgeguard.css">
 <style>
@@ -75,6 +75,52 @@
     border: 1px solid rgba(229, 72, 77, 0.35); background: #17100f; border-radius: var(--r);
   }
   .hidden { display: none; }
+
+  /* actions: forms in the column head, buttons on the cards */
+  .acts { padding: 12px 14px; border-bottom: 1px solid var(--line); background: #0c0e12; }
+  .acts summary { cursor: pointer; font: 500 12px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+  .acts form { display: grid; gap: 8px; margin-top: 10px; }
+  .acts label { display: grid; gap: 4px; font: 400 11px/1.3 var(--mono); color: var(--dim); }
+  input.f {
+    width: 100%; box-sizing: border-box; background: var(--surface); color: var(--text); border: 1px solid var(--line);
+    border-radius: var(--r); padding: 6px 8px; font: 400 12.5px var(--mono);
+  }
+  input.f:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .bal { font: 500 12px var(--mono); color: var(--text); }
+  button.a {
+    font: 500 12px var(--sans); padding: 6px 10px; border-radius: var(--r); cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.18); background: transparent; color: var(--text);
+  }
+  button.a:hover { border-color: var(--accent); }
+  button.a.go { background: var(--text); color: #0b0c0e; border-color: var(--text); }
+  button.a.warn { color: var(--red); border-color: rgba(229, 72, 77, 0.4); }
+  button.a:disabled { opacity: 0.5; cursor: wait; }
+  .c .ops { display: flex; gap: 6px; align-items: center; margin-top: 9px; flex-wrap: wrap; }
+  .c .ops input.f { width: 90px; }
+  .hint { font: 400 11px/1.4 var(--mono); color: var(--dim); }
+
+  /* the guided scenario */
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+  .step { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; background: var(--surface); }
+  .step .n { font: 500 11px/1 var(--mono); color: var(--dim); }
+  .step .w { margin-top: 6px; font-size: 13px; }
+  .step .h { margin-top: 4px; font: 400 11px/1.4 var(--mono); color: var(--dim); }
+  .step.done { border-color: rgba(63, 178, 127, 0.4); }
+  .step.done .n { color: var(--green); }
+  .step.next { border-color: var(--accent); }
+  .step.next .n { color: var(--accent); }
+  .step.bad.done { border-color: rgba(229, 72, 77, 0.45); }
+  .step.bad.done .n { color: var(--red); }
+
+  /* toasts and sign-in */
+  #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: grid; gap: 8px; max-width: min(420px, calc(100vw - 32px)); }
+  .toast { padding: 10px 12px; border-radius: var(--r); background: #12151a; border: 1px solid var(--line); font-size: 12.5px; }
+  .toast.ok { border-color: rgba(63, 178, 127, 0.45); }
+  .toast.err { border-color: rgba(229, 72, 77, 0.5); color: #f3c9ca; }
+  .toast .mono { display: block; margin-top: 4px; color: var(--dim); font-size: 11px; overflow-wrap: anywhere; }
+  dialog { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; width: min(360px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
 </style>
 
 <aside>
@@ -110,9 +156,13 @@
       <label class="eyebrow" style="display:flex;align-items:center;gap:8px">Viewing as
         <select id="viewAs"></select>
       </label>
+      <label class="eyebrow" style="display:flex;align-items:center;gap:6px" title="Hide the contracts of earlier runs">
+        <input type="checkbox" id="focus" checked> this fingerprint only
+      </label>
       <label class="eyebrow" style="display:flex;align-items:center;gap:6px">
         <input type="checkbox" id="auto" checked> live
       </label>
+      <span id="auth"></span>
     </span>
   </div>
 
@@ -127,6 +177,13 @@
           receives the contract.
         </p>
       </div>
+    </div>
+    <div class="card" id="guide">
+      <div class="row" style="justify-content:space-between">
+        <span class="eyebrow">The scenario, step by step <span class="n" id="guide-hash"></span></span>
+        <span class="hint" id="guide-note"></span>
+      </div>
+      <div class="steps" id="steps" style="margin-top:12px"></div>
     </div>
     <div class="banner hidden" id="collision-banner">
       <span class="dot red"></span>
@@ -253,6 +310,21 @@
   </div>
 </main>
 
+<dialog id="signin">
+  <form id="signin-form" method="dialog" style="display:grid;gap:12px">
+    <div style="font-weight:500">Sign in to act</div>
+    <p class="small body-muted" style="margin:0">One demo account drives every party, the way the shared DevNet node gives
+      each team one ledger user. In production each institution signs in on its own participant.</p>
+    <input class="f" id="pw" type="password" autocomplete="current-password" placeholder="Demo password" required>
+    <div class="row" style="justify-content:flex-end">
+      <button class="a" type="button" id="signin-cancel">Cancel</button>
+      <button class="a go" type="submit">Sign in</button>
+    </div>
+    <div class="hint" id="signin-err"></div>
+  </form>
+</dialog>
+<div id="toasts" aria-live="polite"></div>
+
 <script>
 // Field order per template: what a reader should see first, and nothing we do not hold.
 const FIELDS = {
@@ -264,16 +336,21 @@ const FIELDS = {
   Claim: ["lender", "hash", "openedAt"],
   CollisionNotice: ["recipient", "hash", "at"],
   RegistryDelegation: ["ops"],
-  AmuletAllocation: ["amount"],
+  AmuletAllocation: ["sender", "receiver", "amount"],
   MockAllocation: ["sender", "receiver", "amount"],
 };
-const short = (v) =>
-  typeof v !== "string" ? (v === null ? "—" : String(v))
+// Contract fields come from the ledger, and visitors can now create contracts: escape everything.
+const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const short = (v) => esc(
+  typeof v !== "string" ? (v === null ? "none" : String(v))
+  : /^-?\d+\.\d+$/.test(v) ? Number(v).toLocaleString("en", { maximumFractionDigits: 6 })
   : v.includes("::") ? v.split("::")[0].replace(/^[0-9a-f]{8}-/, "")
   : /^[0-9a-f]{40,}$/.test(v) ? v.slice(0, 8) + "…" + v.slice(-4)
-  : v.length > 26 ? v.slice(0, 22) + "…" : v;
+  : v.length > 26 ? v.slice(0, 22) + "…" : v);
 
-let parties = [], selected = "", seen = new Set(), first = true;
+let cfg = { parties: [] }, parties = [], selected = "", seen = new Set(), first = true;
+let signedIn = false, byParty = {}, balances = {}, inPlay = "";
+const SCHEMA = "receivables-pool-v1";
 
 const post = async (p, b) => {
   const r = await fetch(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
@@ -288,21 +365,177 @@ async function acs(party, offset) {
   });
   return rows.map((r) => r.contractEntry?.JsActiveContract?.createdEvent).filter(Boolean)
     .filter((c) => c.templateId.includes("PledgeGuard") || /Allocation$/.test(c.templateId.split(":").pop()))
-    .map((c) => ({ t: c.templateId.split(":").pop(), a: c.createArgument ?? {}, cid: c.contractId }));
+    .map((c) => {
+      const a = c.createArgument ?? {};
+      // a token-standard allocation nests its leg; show its amount like any other field
+      const leg = a.allocation?.transferLeg;
+      return { t: c.templateId.split(":").pop(), a: leg ? { amount: leg.amount, sender: leg.sender, receiver: leg.receiver } : a, cid: c.contractId };
+    });
 }
 
-const card = ({ t, a, cid }) => {
+// ---- actions
+function toast(kind, title, detail) {
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  el.innerHTML = `${esc(title)}${detail ? `<span class="mono">${esc(detail)}</span>` : ""}`;
+  document.getElementById("toasts").append(el);
+  setTimeout(() => el.remove(), kind === "err" ? 12000 : 7000);
+}
+
+async function act(name, body, button, label) {
+  if (!signedIn) return document.getElementById("signin").showModal();
+  const old = button?.textContent;
+  if (button) { button.disabled = true; button.textContent = "On the ledger…"; }
+  try {
+    const r = await fetch(`/act/${name}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (r.status === 401) { signedIn = false; renderAuth(); }
+    if (!r.ok) throw new Error(j.error ?? r.statusText);
+    toast("ok", label, `update ${j.updateId.slice(0, 18)}…  offset ${j.offset}`);
+    refresh(); // not awaited: the caller can update its form right away
+    return j;
+  } catch (e) {
+    toast("err", `${label}: refused`, e.message);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = old; }
+  }
+}
+
+// The originator hands the fingerprint to its lenders off-ledger; in this one-browser demo that is sessionStorage.
+const lastHash = () => { try { return sessionStorage.getItem("pg.hash") ?? ""; } catch { return ""; } };
+const keepHash = (h) => { try { sessionStorage.setItem("pg.hash", h); } catch { /* private mode */ } };
+const sha256 = async (text) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const normalise = (f) => `${SCHEMA}|contract=${f.contract.trim().toUpperCase()}|debtor=${f.debtor.trim().toLowerCase()}|nominal=${Number(f.nominal)}|origination=${f.origination}`;
+
+// Forms live in the column head and are built once, so a refresh never wipes what is being typed.
+function actionsFor(p) {
+  if (!cfg.writable || !signedIn) return "";
+  if (p.key === "ORIGINATOR") {
+    const ref = `RP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    return `<details class="acts" open><summary>Register a collateral file</summary>
+      <form data-form="fingerprint">
+        <label>Contract number<input class="f" name="contract" value="${ref}" required></label>
+        <label>Debtor<input class="f" name="debtor" value="Acme Auto Finance" required></label>
+        <div class="row"><label style="flex:1">Nominal<input class="f" name="nominal" type="number" min="1" value="1250000" required></label>
+          <label style="flex:1">Origination<input class="f" name="origination" type="date" value="2026-09-01" required></label></div>
+        <div class="hint">sha256 of the normalised fields, computed in this browser. The file itself never leaves.</div>
+        <div class="hint" data-preview></div>
+        <div class="row"><button class="a go" type="submit">Register fingerprint</button></div>
+      </form></details>`;
+  }
+  if (p.key === "LENDER_A" || p.key === "LENDER_B") {
+    const fund = cfg.instrument === "amulet" ? `<button class="a" type="button" data-fund="${p.key}">Fund ${Math.min(50, cfg.maxFund)} ${cfg.unit}</button>` : "";
+    return `<div class="acts"><div class="row" style="justify-content:space-between"><span class="bal" data-bal="${p.key}">balance…</span>${fund}</div>
+      <details style="margin-top:10px"><summary>Propose a facility</summary>
+      <form data-form="propose" data-lender="${p.key}">
+        <label>Collateral fingerprint, received from the originator<input class="f" name="hash" pattern="[0-9a-f]{64}" placeholder="sha256" value="${esc(lastHash())}" required></label>
+        <div class="row"><label style="flex:1">Amount (notional)<input class="f" name="amount" type="number" min="1" value="${p.key === "LENDER_A" ? 1000000 : 750000}" required></label>
+          <label style="flex:1">Rate<input class="f" name="rate" type="number" step="0.001" min="0.001" max="1" value="${p.key === "LENDER_A" ? 0.085 : 0.091}" required></label></div>
+        <label>Maturity<input class="f" name="maturity" type="date" value="2027-04-01" required></label>
+        <div class="row"><button class="a go" type="submit">Propose to the originator</button></div>
+      </form></details></div>`;
+  }
+  if (p.key === "REGISTRY") {
+    return `<div class="acts"><div class="hint">The registry automation opens indexes and settles draws on its own, under the delegation below.
+      On DevNet the registry is one party; on LocalNet granting and revoking are 2-of-3 votes.</div>
+      <div class="row" style="margin-top:8px" data-deleg></div></div>`;
+  }
+  return "";
+}
+
+// Buttons on the cards: what this party may do with this contract.
+function opsFor(p, c) {
+  if (!cfg.writable || !signedIn) return "";
+  const L = p.key;
+  if (p.key === "ORIGINATOR" && c.t === "FacilityProposal") return `<button class="a go" data-op="accept" data-cid="${esc(c.cid)}">Accept</button>`;
+  if (L === "LENDER_A" || L === "LENDER_B") {
+    if (c.t === "Facility") return `<input class="f" type="number" min="0.0001" max="${cfg.maxDraw}" step="any" value="${L === "LENDER_A" ? 5 : 4}" data-amount aria-label="draw amount">
+      <span class="hint">${esc(cfg.unit)}</span><button class="a go" data-op="draw" data-lender="${L}" data-cid="${esc(c.cid)}">Draw</button>`;
+    if (c.t === "Claim") return `<button class="a" data-op="release" data-lender="${L}" data-cid="${esc(c.cid)}">Repay and release</button>`;
+    if (c.t === "DrawRequest") return `<span class="hint">waiting for the registry</span><button class="a" data-op="cancel" data-lender="${L}" data-cid="${esc(c.cid)}">Cancel</button>`;
+    if (/Allocation$/.test(c.t)) return `<button class="a" data-op="unlock" data-lender="${L}" data-cid="${esc(c.cid)}">Withdraw funds</button>`;
+  }
+  return "";
+}
+
+const card = (p) => ({ t, a, cid }) => {
   const keys = (FIELDS[t] ?? Object.keys(a)).filter((k) => a[k] !== undefined);
   const isNew = !first && !seen.has(cid);
   seen.add(cid);
-  return `<div class="c ${t}${isNew ? " new" : ""}"><div class="t">${t}</div>
-    <dl>${keys.map((k) => `<dt>${k}</dt><dd>${short(a[k])}</dd>`).join("")}</dl></div>`;
+  const ops = opsFor(p, { t, a, cid });
+  return `<div class="c ${esc(t)}${isNew ? " new" : ""}"><div class="t">${esc(t)}</div>
+    <dl>${keys.map((k) => `<dt>${esc(k)}</dt><dd>${short(a[k])}</dd>`).join("")}</dl>${ops ? `<div class="ops">${ops}</div>` : ""}</div>`;
 };
 
 const rowsTable = (head, rows) => rows.length
   ? `<table class="data"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
      <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`
   : `<div class="view"><div class="empty">nothing yet</div></div>`;
+
+// Column skeletons: rebuilt only when the selection or the sign-in state changes.
+function buildColumns() {
+  const shown = selected ? parties.filter((p) => p.name === selected) : parties.filter((p) => p.name !== "Auditor");
+  document.getElementById("cols").innerHTML = shown.map((p) => `<section class="view ${p.name.toLowerCase().replace(/\s/g, "")}" data-party="${p.key}">
+      <header><span><span class="who">${esc(p.name)}</span><span class="role">${esc(p.role)}</span></span>
+      <span class="tag" data-count>0</span></header>${actionsFor(p)}<div data-list></div></section>`).join("");
+  first = true;
+  paint();
+}
+
+function paint() {
+  for (const col of document.querySelectorAll("#cols [data-party]")) {
+    const p = parties.find((x) => x.key === col.dataset.party), h = currentHash();
+    const all = byParty[p.name];
+    // contracts without a hash (allocations, the delegation) always show
+    const focus = Array.isArray(all) && document.getElementById("focus").checked;
+    // contracts without a hash (allocations, the delegation) always show; test mocks only on a mock instance
+    const cs = focus ? all.filter((c) => (c.a.hash === undefined || !h || c.a.hash === h) && (cfg.instrument === "mock" || !c.t.startsWith("Mock"))) : all;
+    const html = cs?.error ? `<div class="err">${esc(cs.error)}</div>`
+      : cs?.length ? `<div class="list">${cs.map(card(p)).join("")}</div>`
+      : `<div class="empty">empty: not a stakeholder of anything here</div>`;
+    const list = col.querySelector("[data-list]");
+    if (list.dataset.html !== html) { list.innerHTML = html; list.dataset.html = html; } // keep typed values when nothing changed
+    col.querySelector("[data-count]").textContent = cs?.length ?? 0;
+    const bal = col.querySelector("[data-bal]");
+    if (bal) bal.textContent = balances[p.key] === undefined ? "balance…" : `holds ${Number(balances[p.key]).toLocaleString("en", { maximumFractionDigits: 4 })} ${cfg.unit}`;
+    const deleg = col.querySelector("[data-deleg]");
+    if (deleg) {
+      const d = (cs ?? []).filter((c) => c.t === "RegistryDelegation");
+      const html2 = d.length ? `<span class="tag ok">delegation active</span>${d.map((x) => `<button class="a warn" data-op="revoke" data-cid="${esc(x.cid)}">Revoke</button>`).join("")}`
+        : `<span class="tag bad">no delegation: draws wait</span><button class="a go" data-op="grant">Grant delegation</button>`;
+      if (deleg.dataset.html !== html2) { deleg.innerHTML = html2; deleg.dataset.html = html2; }
+    }
+  }
+  first = false;
+}
+
+// ---- the guided scenario, read from the ledger state of the fingerprint in play
+const of = (name) => Array.isArray(byParty[name]) ? byParty[name] : [];
+// The fingerprint in play: the one this browser registered, else the latest the originator holds.
+const currentHash = () => lastHash() || inPlay || of("Originator").filter((c) => c.t === "CollateralFingerprint").at(-1)?.a.hash || "";
+
+function guide() {
+  const fps = of("Originator").filter((c) => c.t === "CollateralFingerprint");
+  const indexes = of("Registry").filter((c) => c.t === "ClaimIndex");
+  const h = currentHash();
+  const on = (c) => c.a.hash === h;
+  const facs = of("Originator").filter((c) => c.t === "Facility" && on(c));
+  const has = (name, t) => of(name).some((c) => c.t === t && on(c));
+  const s = [
+    ["Register the collateral", "Originator: fill the form, the hash is computed here", indexes.some(on)],
+    ["Two lenders, two facilities", "Each lender proposes with the hash, the originator accepts", facs.length >= 2],
+    ["Lender A draws", "Draw on A's facility: real coin moves, a claim is opened", has("Lender A", "Claim") || has("Lender B", "Claim")],
+    ["The same file, again", "Optional: register the same fields a second time, the registry ignores it", fps.some(on) && indexes.some(on)],
+    ["Lender B draws the same collateral", "Refused atomically: no transfer, one notice per lender", has("Lender B", "CollisionNotice"), true],
+    ["A repays, B retries", "Repay on A's claim, withdraw B's stuck funds, draw again", has("Lender B", "Claim")],
+  ];
+  const next = s.findIndex(([, , done], i) => !done && i !== 3);
+  document.getElementById("steps").innerHTML = s.map(([w, hint, done, isBad], i) =>
+    `<div class="step${done ? " done" : ""}${i === next ? " next" : ""}${isBad ? " bad" : ""}"><div class="n">${done ? "✓" : i + 1} ${i === next ? "next" : ""}</div>
+      <div class="w">${esc(w)}</div><div class="h">${esc(hint)}</div></div>`).join("");
+  document.getElementById("guide-hash").textContent = h ? `· fingerprint ${h.slice(0, 8)}…` : "";
+  document.getElementById("guide-note").textContent = !cfg.writable ? "read-only instance" : signedIn ? "" : "sign in to play it";
+}
 
 async function refresh() {
   let offset;
@@ -311,24 +544,14 @@ async function refresh() {
   } catch (e) { document.getElementById("net").textContent = "unreachable"; return; }
   document.getElementById("offset").textContent = offset;
 
-  const byParty = {};
-  await Promise.all(parties.map(async (p) => { try { byParty[p.name] = await acs(p.party, offset); } catch (e) { byParty[p.name] = { error: e.message }; } }));
-
-  // party views
-  const shown = selected ? parties.filter((p) => p.name === selected) : parties.filter((p) => p.name !== "Auditor");
-  document.getElementById("cols").innerHTML = shown.map((p) => {
-    const cs = byParty[p.name];
-    const body = cs?.error ? `<div class="err">${cs.error}</div>`
-      : cs.length ? `<div class="list">${cs.map(card).join("")}</div>`
-      : `<div class="empty">empty: not a stakeholder of anything here</div>`;
-    return `<section class="view ${p.name.toLowerCase().replace(/\s/g, "")}">
-      <header><span><span class="who">${p.name}</span><span class="role">${p.role}</span></span>
-      <span class="tag">${(cs?.length ?? 0)}</span></header>${body}</section>`;
-  }).join("");
-  first = false;
+  const next = {};
+  await Promise.all(parties.map(async (p) => { try { next[p.name] = await acs(p.party, offset); } catch (e) { next[p.name] = { error: e.message }; } }));
+  byParty = next;
+  try { ({ balances, hash: inPlay } = await (await fetch("/state")).json()); } catch { /* balances are a convenience */ }
+  paint();
+  guide();
 
   // counters and the collision banner
-  const all = Object.values(byParty).flatMap((v) => Array.isArray(v) ? v : []);
   const notices = (byParty["Auditor"] ?? []).filter((c) => c.t === "CollisionNotice");
   document.getElementById("n-views").textContent = parties.length;
   document.getElementById("n-coll").textContent = notices.length || "";
@@ -340,19 +563,19 @@ async function refresh() {
   if (notices.length) {
     const h = notices[notices.length - 1].a.hash;
     document.getElementById("collision-detail").textContent =
-      `fingerprint ${short(h)} carried a live claim. ${notices.length} notice(s), 0 transferred, counterparties not disclosed.`;
+      `fingerprint ${String(h).slice(0, 8)}… carried a live claim. ${notices.length} notice(s), 0 transferred, counterparties not disclosed.`;
   }
 
   document.getElementById("coll-count").textContent = notices.length;
   document.getElementById("coll-table").innerHTML = rowsTable(
     ["Fingerprint", "Notified lender", "At", "Underlying facility"],
     notices.map((n) => [`<span style="color:var(--accent)">${short(n.a.hash)}</span>`, short(n.a.recipient),
-      String(n.a.at ?? "").replace("T", " ").slice(0, 19), `<span class="redacted">not available</span>`]));
+      esc(String(n.a.at ?? "").replace("T", " ").slice(0, 19)), `<span class="redacted">not available</span>`]));
 
-  const reg = byParty["Registry"] ?? [];
+  const reg = Array.isArray(byParty["Registry"]) ? byParty["Registry"] : [];
   document.getElementById("reg-table").innerHTML = rowsTable(
     ["Contract", "Fingerprint", "Holder or recipient", "Terms"],
-    reg.map((c) => [c.t, c.a.hash ? `<span style="color:var(--accent)">${short(c.a.hash)}</span>` : "—",
+    reg.map((c) => [esc(c.t), c.a.hash ? `<span style="color:var(--accent)">${short(c.a.hash)}</span>` : "-",
       short(c.a.holder ?? c.a.lender ?? c.a.recipient ?? c.a.ops ?? null), `<span class="redacted">never held</span>`]));
 
   const deleg = reg.some((c) => c.t === "RegistryDelegation");
@@ -361,6 +584,73 @@ async function refresh() {
   d.className = "tag " + (deleg ? "ok" : "bad");
 }
 
+// ---- sign-in
+function renderAuth() {
+  const el = document.getElementById("auth");
+  el.innerHTML = !cfg.writable ? `<span class="tag">read-only</span>`
+    : signedIn ? `<span class="tag ok">signed in</span> <button class="a" id="signout">Sign out</button>`
+    : `<button class="a go" id="signin-open">Sign in to act</button>`;
+  buildColumns();
+  guide();
+}
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.id === "signin-open") return document.getElementById("signin").showModal();
+  if (b.id === "signin-cancel") return document.getElementById("signin").close();
+  if (b.id === "signout") { await post("/auth/logout", {}); signedIn = false; return renderAuth(); }
+  if (b.dataset.fund) return act("fund", { lender: b.dataset.fund, amount: String(Math.min(50, cfg.maxFund)) }, b, `${b.dataset.fund === "LENDER_A" ? "Lender A" : "Lender B"} funded`);
+  const op = b.dataset.op, c = b.dataset.cid, L = b.dataset.lender;
+  if (op === "accept") return act("accept", { proposalCid: c }, b, "Facility signed by both sides");
+  if (op === "draw") {
+    const amount = b.closest(".ops").querySelector("[data-amount]").value;
+    return act("draw", { lender: L, facilityCid: c, amount }, b, `Draw of ${amount} ${cfg.unit} sent to the registry check`);
+  }
+  if (op === "release") return act("release", { lender: L, claimCid: c }, b, "Repaid: the fingerprint is free again");
+  if (op === "cancel") return act("cancel", { lender: L, drawCid: c }, b, "Draw request cancelled");
+  if (op === "unlock") return act("unlock", { lender: L, allocationCid: c }, b, "Allocation withdrawn, funds back to the lender");
+  if (op === "grant") return act("grant", {}, b, "Delegation granted to the registry automation");
+  if (op === "revoke") return act("revoke", { delegationCid: c }, b, "Delegation revoked: draws now wait");
+});
+
+document.addEventListener("input", async (e) => {
+  const f = e.target.closest('form[data-form="fingerprint"]');
+  if (f) f.querySelector("[data-preview]").textContent = `hash ${(await sha256(normalise(Object.fromEntries(new FormData(f))))).slice(0, 16)}…`;
+});
+
+document.addEventListener("submit", async (e) => {
+  const f = e.target;
+  if (f.id === "signin-form") {
+    e.preventDefault();
+    const r = await fetch("/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: document.getElementById("pw").value }) });
+    const j = await r.json();
+    if (!r.ok) { document.getElementById("signin-err").textContent = j.error; return; }
+    document.getElementById("pw").value = "";
+    document.getElementById("signin-err").textContent = "";
+    document.getElementById("signin").close();
+    signedIn = true;
+    return renderAuth();
+  }
+  if (!f.dataset.form) return;
+  e.preventDefault();
+  const v = Object.fromEntries(new FormData(f));
+  const button = f.querySelector('button[type="submit"]');
+  if (f.dataset.form === "fingerprint") {
+    const hash = await sha256(normalise(v));
+    const r = await act("fingerprint", { schemaId: SCHEMA, hash }, button, "Fingerprint registered, the registry opens its index");
+    if (r) {
+      keepHash(hash);
+      for (const input of document.querySelectorAll('form[data-form="propose"] [name="hash"]')) input.value = hash;
+    }
+  }
+  if (f.dataset.form === "propose") {
+    await act("propose", { lender: f.dataset.lender, schemaId: SCHEMA, hash: v.hash, amount: v.amount, rate: v.rate, maturity: v.maturity }, button, "Facility proposed to the originator");
+  }
+});
+
+document.getElementById("focus").onchange = () => paint();
+
 document.querySelectorAll("a.nav").forEach((a) => a.addEventListener("click", (e) => {
   e.preventDefault();
   document.querySelectorAll("a.nav").forEach((x) => x.setAttribute("aria-current", String(x === a)));
@@ -368,10 +658,13 @@ document.querySelectorAll("a.nav").forEach((a) => a.addEventListener("click", (e
 }));
 
 (async () => {
-  ({ parties } = await (await fetch("/config")).json());
+  cfg = await (await fetch("/config")).json();
+  parties = cfg.parties;
+  signedIn = (await (await fetch("/auth/me")).json()).signedIn;
   const sel = document.getElementById("viewAs");
-  sel.innerHTML = `<option value="">All but the auditor</option>` + parties.map((p) => `<option>${p.name}</option>`).join("");
-  sel.onchange = () => { selected = sel.value; refresh(); };
+  sel.innerHTML = `<option value="">All but the auditor</option>` + parties.map((p) => `<option>${esc(p.name)}</option>`).join("");
+  sel.onchange = () => { selected = sel.value; buildColumns(); };
+  renderAuth();
   await refresh();
   setInterval(() => document.getElementById("auto").checked && refresh(), 4000);
 })();

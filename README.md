@@ -130,16 +130,29 @@ git clone -b hackathon https://github.com/DLC-link/decentralization-manager ../d
 
 If your host already uses port 5432, start the sandbox with `DB_PORT=5433 ./hackathon/up.sh`.
 
-### The party views
+### The dashboard
+
+Live at **https://pledgeguard.fyra.fun/app**. The whole workflow runs from the browser, no script:
+register a collateral file (the sha256 is computed in the browser, the file never leaves), propose and
+accept facilities, draw in real Canton Coin, watch the collision, withdraw the stuck allocation, repay,
+retry, fund a lender, grant or revoke the registry delegation. A step-by-step guide on top follows the
+fingerprint in play, and every action shows its update id and offset.
 
 ```sh
-node frontend/server.mjs     # http://localhost:8090, reads scripts/.devnet.env
+node frontend/server.mjs     # http://localhost:8090/app, reads scripts/.devnet.env
+node backend/registry.mjs    # the registry automation, with the same env (see compose.yaml)
+docker compose up -d --build # both, as deployed: hardened containers behind the shared Caddy
 ```
 
-One column per party, refreshed every 4 seconds, plus a "VIEWING AS" selector. Nothing is
-filtered in the page: each column is one `/v2/state/active-contracts` call for that party and
-shows whatever comes back. Select the auditor and the screen holds two collision notices and
-nothing else.
+Reading is public: one column per party, refreshed every 4 seconds, plus a "VIEWING AS" selector.
+Nothing is filtered by role in the page: each column is one `/v2/state/active-contracts` call for that
+party and shows whatever comes back (the "this fingerprint only" box hides earlier runs). Select the
+auditor and the screen holds collision notices and nothing else.
+
+Acting needs the demo password (`DEMO_PASSWORD`, given to the judges with the submission). The server
+then runs a fixed set of validated actions and picks the acting party itself; the browser never sends
+a command or a party id. Session in a signed `HttpOnly; Secure; SameSite=Strict` cookie, origin check,
+10 sign-in attempts per 15 minutes, 30 actions a minute, draws capped at `MAX_DRAW` (50 CC).
 
 Honest note: the demo drives all parties from one ledger user that has `CanActAs` on each of
 them, because the shared DevNet node gives every team one user. The separation on screen is not

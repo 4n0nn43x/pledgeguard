@@ -118,8 +118,14 @@ scenario() {
   FAC_B=$(facility $P2 "$LENDER_B" 750000.0 0.091);  echo "   facility B $FAC_B"
   echo "3. lender A draws"
   DRAW_A=$(draw $P1 "$LENDER_A" "$FAC_A" 1000000.0); wait_settled $P1 "$LENDER_A" "$DRAW_A"
+  echo "3b. originator registers the same fingerprint again (the fraud): no second index"
+  create $P1 "$ORIGINATOR" "$T_FP" "$(jq -n --arg o "$ORIGINATOR" --arg r "$REGISTRY" --arg s "$SCHEMA" --arg h "$HASH" '{originator: $o, registry: $r, schemaId: $s, hash: $h}')" >/dev/null
+  sleep 3
   echo "4. lender B draws on the same hash: collision"
   DRAW_B=$(draw $P2 "$LENDER_B" "$FAC_B" 750000.0); wait_settled $P2 "$LENDER_B" "$DRAW_B"
+  acs_of $P2 "$LENDER_B" | jq -e --arg h "$HASH" 'any(.[]; (.templateId | endswith(":CollisionNotice")) and .createArgument.hash == $h)' >/dev/null \
+    || { echo "FAIL: lender B settled on a pledged hash, no collision notice" >&2; exit 1; }
+  echo "   collision recorded, no transfer"
   echo "5. lender A repays and releases"
   CLAIM_A=$(acs_of $P1 "$LENDER_A" | jq -r --arg h "$HASH" '.[] | select((.templateId | endswith(":Claim")) and .createArgument.hash == $h) | .contractId' | head -1)
   exercise $P1 "$LENDER_A" "$T_CLAIM" "$CLAIM_A" Claim_Release '{}' >/dev/null

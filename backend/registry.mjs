@@ -2,7 +2,9 @@
 // The registry is a decentralized (externally signed) party, so this process acts as the
 // automation party `ops` through the RegistryDelegation contract the registry granted via
 // governance, reading as the registry. It watches the registry's ACS delta and reacts:
-//   CollateralFingerprint created  -> Delegation_Index
+//   CollateralFingerprint created  -> Delegation_Index, once per hash: a second fingerprint for a
+//                                     hash that already has an index is ignored, otherwise a borrower
+//                                     could re-register a pledged file and get a fresh, empty index
 //   ClaimIndex created / archived  -> keep the hash -> latest ClaimIndex cid map
 //   DrawRequest created            -> Delegation_Settle with the current index
 // commandId is derived from the triggering contract id, so a restart never double-settles.
@@ -76,6 +78,7 @@ async function executeTransferContext(allocationCid) {
   };
 }
 
+// true when the command went through (or already had, after a restart)
 async function exercise(templateId, contractId, choice, choiceArgument, commandId, disclosedContracts = []) {
   try {
     await api("/v2/commands/submit-and-wait", {
@@ -88,13 +91,16 @@ async function exercise(templateId, contractId, choice, choiceArgument, commandI
       packageIdSelectionPreference: PKG_PREF,
     });
     console.log(`${choice} ok (${commandId})`);
+    return true;
   } catch (e) {
     // ALREADY_EXISTS = duplicate commandId after a restart, the work is already done.
     // CONTRACT_NOT_ACTIVE = someone raced us (e.g. lender withdrew). Anything else is worth seeing.
     const msg = String(e.message);
+    if (/ALREADY_EXISTS|DUPLICATE_COMMAND/.test(msg)) return true; // gRPC status or JSON API error code
     // Never let one bad contract stop the automation: log it and keep serving the others.
     // Stale contracts from an older package version end up here after an upgrade.
     console.log(`${choice} failed on ${contractId.slice(0, 12)}: ${msg.slice(0, 200)}`);
+    return false;
   }
 }
 
@@ -102,6 +108,10 @@ async function exercise(templateId, contractId, choice, choiceArgument, commandI
 const indexByHash = new Map();
 const pendingDraws = [];
 const pendingFingerprints = [];
+// hash -> fingerprint cid whose Delegation_Index was submitted, until its ClaimIndex event arrives. Set before
+// submitting: a submit that errors (timeout, 5xx) may still have committed, so the hash stays reserved.
+const indexing = new Map();
+const MAX_ATTEMPTS = 5; // a command that keeps failing (withdrawn, stale package) is dropped after this, restart retries it
 let delegationCid = null; // the live RegistryDelegation granted to OPS, null once revoked
 
 function onCreated(ev) {
@@ -114,6 +124,7 @@ function onCreated(ev) {
   if (ev.templateId.endsWith(":CollateralFingerprint")) pendingFingerprints.push(ev);
   if (ev.templateId.endsWith(":ClaimIndex")) {
     indexByHash.set(a.hash, ev.contractId);
+    indexing.delete(a.hash);
     return;
   }
   if (ev.templateId.endsWith(":DrawRequest")) pendingDraws.push(ev);
@@ -122,15 +133,33 @@ function onCreated(ev) {
 async function settlePending() {
   if (!delegationCid) { if (pendingDraws.length || pendingFingerprints.length) console.log("waiting for a delegation from the registry"); return; }
   for (const ev of pendingFingerprints.splice(0)) {
-    await exercise(T.delegation, delegationCid, "Delegation_Index", { fingerprintCid: ev.contractId }, `index-${ev.contractId}`);
+    const { hash } = ev.createArgument;
+    // The index is the registry's memory of the hash: never open a second one. The duplicate
+    // fingerprint stays unindexed, so the hash keeps colliding against the live claim.
+    if (indexByHash.has(hash) || (indexing.has(hash) && indexing.get(hash) !== ev.contractId)) { console.log(`fingerprint ${ev.contractId.slice(0, 12)} ignored: ${hash} is already indexed`); continue; }
+    indexing.set(hash, ev.contractId);
+    if (await exercise(T.delegation, delegationCid, "Delegation_Index", { fingerprintCid: ev.contractId }, `index-${ev.contractId}`)) continue;
+    // same commandId on retry: if the first submit did commit, the ledger answers duplicate
+    if ((ev.attempts = (ev.attempts ?? 0) + 1) < MAX_ATTEMPTS) pendingFingerprints.push(ev);
+    else { indexing.delete(hash); console.log(`fingerprint ${ev.contractId.slice(0, 12)} dropped after ${MAX_ATTEMPTS} attempts`); }
   }
   for (const ev of pendingDraws.splice(0)) {
     const indexCid = indexByHash.get(ev.createArgument.hash);
     if (!indexCid) { console.log(`no index yet for ${ev.createArgument.hash}, retrying later`); pendingDraws.push(ev); continue; }
-    const { context, disclosed } = await executeTransferContext(ev.createArgument.allocationCid);
-    await exercise(T.delegation, delegationCid, "Delegation_Settle",
-      { drawCid: ev.contractId, indexCid, auditor: AUDITOR, extraArgs: REGISTRY_URL ? { context, meta: { values: {} } } : null },
-      `settle-${ev.contractId}`, disclosed);
+    let ok = false;
+    try {
+      const { context, disclosed } = await executeTransferContext(ev.createArgument.allocationCid);
+      ok = await exercise(T.delegation, delegationCid, "Delegation_Settle",
+        { drawCid: ev.contractId, indexCid, auditor: AUDITOR, extraArgs: REGISTRY_URL ? { context, meta: { values: {} } } : null },
+        `settle-${ev.contractId}`, disclosed);
+    } catch (e) {
+      console.log(`settle ${ev.contractId.slice(0, 12)}: ${String(e.message).slice(0, 200)}`); // token registry down: retry
+    }
+    // A failure is often transient (index cid replaced in the same batch, token registry 5xx):
+    // retry on the next tick, a rejected command may be resubmitted with the same commandId.
+    if (ok) continue;
+    if ((ev.attempts = (ev.attempts ?? 0) + 1) < MAX_ATTEMPTS) pendingDraws.push(ev);
+    else console.log(`draw ${ev.contractId.slice(0, 12)} dropped after ${MAX_ATTEMPTS} attempts, a restart picks it up again`);
   }
 }
 

@@ -81,7 +81,75 @@
   table.matrix td:first-child, table.matrix th:first-child { text-align: left; }
   table.matrix td.none { color: var(--dim); }
 
+  /* ---- motion: one set of tokens, ease-out in, faster ease-in out, transform and opacity only */
+  :root {
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+    --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+    --t-press: 120ms; --t-state: 240ms; --t-layout: 420ms; --t-enter: 620ms;
+    --glow: rgba(201, 185, 138, 0.35);
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.985); } }
+  @keyframes breathe { 0%, 100% { box-shadow: 0 0 0 0 var(--glow); } 50% { box-shadow: 0 0 0 6px rgba(201, 185, 138, 0); } }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+  @keyframes fresh { from { background: rgba(201, 185, 138, 0.16); } }
+  @keyframes toast-in { from { opacity: 0; transform: translateX(24px) scale(0.97); } }
+  .enter { animation: rise var(--t-enter) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
+  button.a { transition: transform var(--t-press) var(--ease-out), border-color var(--t-state) var(--ease-out), background var(--t-state) var(--ease-out); }
+  button.a:active { transform: scale(0.97); }
+  button.a.cue { animation: breathe 2.4s var(--ease-io) infinite; }
+  tr.fresh td { animation: fresh 1.8s var(--ease-out); }
+
+  /* sign-in: numbered steps, cards that read as choices */
+  .step-label { display: flex; align-items: center; gap: 10px; margin-top: 26px; font: 500 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .step-label .num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-strong, rgba(255,255,255,.2)); color: var(--text); font-size: 11px; }
+  .step-label .arrow { color: var(--accent); animation: bob 1.8s var(--ease-io) infinite; }
+  .step-label.done .num { background: var(--accent); border-color: var(--accent); color: #0b0c0e; }
+  .step-label.done .arrow { display: none; }
+  .orgpick { position: relative; transition: transform var(--t-state) var(--ease-out), border-color var(--t-state) var(--ease-out), box-shadow var(--t-state) var(--ease-out), background var(--t-state) var(--ease-out); }
+  .orgpick:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.28); box-shadow: 0 10px 28px -14px rgba(0, 0, 0, 0.8); background: #14171c; }
+  .orgpick:active { transform: translateY(-1px) scale(0.985); transition-duration: var(--t-press); }
+  .orgpick:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  .orgpick .radio { position: absolute; top: 14px; right: 14px; width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.3); }
+  .orgpick .radio::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); transform: scale(0); transition: transform var(--t-state) var(--ease-out); }
+  .orgpick[aria-pressed="true"] .radio { border-color: var(--accent); }
+  .orgpick[aria-pressed="true"] .radio::after { transform: scale(1); }
+  .orgpick .go-hint { margin-top: 10px; font: 500 11px var(--mono); color: var(--accent); opacity: 0; transform: translateY(4px); transition: opacity var(--t-state) var(--ease-out), transform var(--t-state) var(--ease-out); }
+  .orgpick:hover .go-hint, .orgpick[aria-pressed="true"] .go-hint { opacity: 1; transform: none; }
+  #signin-form { transition: opacity var(--t-layout) var(--ease-out), transform var(--t-layout) var(--ease-out), border-color var(--t-layout) var(--ease-out); }
+  #signin-form[data-active="false"] { opacity: 0.45; transform: translateY(6px); }
+  #signin-form[data-active="true"] { border-color: rgba(201, 185, 138, 0.45); }
+
+  /* guide: one element in the spotlight at a time */
+  #tour { position: fixed; inset: 0; z-index: 60; }
+  #tour[hidden] { display: none; }
+  .tour-ring {
+    position: fixed; left: 0; top: 0; border-radius: 8px; pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(4, 5, 7, 0.7), 0 0 0 1px var(--accent), 0 0 28px var(--glow);
+    transition: transform var(--t-layout) var(--ease-out), width var(--t-layout) var(--ease-out), height var(--t-layout) var(--ease-out);
+  }
+  .tour-ring::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; animation: breathe 2.4s var(--ease-io) infinite; }
+  .tour-tip {
+    position: fixed; left: 0; top: 0; width: min(340px, calc(100vw - 32px)); padding: 16px; border-radius: 6px;
+    background: #12151a; border: 1px solid rgba(201, 185, 138, 0.4); box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.9);
+    transition: opacity var(--t-state) var(--ease-out), transform var(--t-state) var(--ease-out);
+  }
+  .tour-tip.out { opacity: 0; transform: translateY(-6px) scale(0.98); transition-duration: 160ms; transition-timing-function: var(--ease-in); }
+  .tour-tip .c { font: 500 11px var(--mono); color: var(--accent); letter-spacing: 0.06em; }
+  .tour-tip .t { margin-top: 6px; font-weight: 500; }
+  .tour-tip p { margin: 6px 0 14px; font-size: 13px; line-height: 20px; color: var(--muted); }
+  .tour-tip .dots { display: flex; gap: 5px; margin-top: 12px; }
+  .tour-tip .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.18); transition: background var(--t-state) var(--ease-out), transform var(--t-state) var(--ease-out); }
+  .tour-tip .dots i.on { background: var(--accent); transform: scale(1.25); }
+  .help .q { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: 6px; border-radius: 50%; border: 1px solid currentColor; font: 600 10px var(--sans); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+
   #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: grid; gap: 8px; max-width: min(440px, calc(100vw - 32px)); }
+  .toast { animation: toast-in var(--t-layout) var(--ease-out) both; transition: opacity 180ms var(--ease-in), transform 180ms var(--ease-in); }
+  .toast.leave { opacity: 0; transform: translateX(16px); }
   .toast { padding: 10px 12px; border-radius: var(--r); background: #12151a; border: 1px solid var(--line); font-size: 12.5px; }
   .toast.ok { border-color: rgba(63, 178, 127, 0.45); }
   .toast.err { border-color: rgba(229, 72, 77, 0.5); color: #f3c9ca; }
@@ -114,7 +182,7 @@
 <main>
   <div class="topbar">
     <span class="eyebrow">Collateral collision registry on Canton</span>
-    <span class="right" id="auth"></span>
+    <span class="right"><button class="a help" id="help" aria-label="Open the guide for this page"><span class="q">?</span>Guide</button><span id="auth" class="row"></span></span>
   </div>
 
   <!-- workspace: the sign-in, then the organisation's own space -->
@@ -125,8 +193,10 @@
         <p class="body-muted small">Each organisation reads its own contracts from the ledger and acts in its own role.
           The registry operator never sees a loan; a lender never sees another lender.</p>
       </div>
-      <div class="orgs" id="orgs" style="margin-top:18px"></div>
-      <form class="card f" id="signin-form" style="max-width:420px;margin-top:16px;padding:16px">
+      <div class="step-label" id="step1"><span class="num">1</span>Choose your organisation <span class="arrow" aria-hidden="true">↓</span></div>
+      <div class="orgs" id="orgs" style="margin-top:12px" role="radiogroup" aria-label="Organisation"></div>
+      <div class="step-label" id="step2"><span class="num">2</span><span id="step2-text">Then sign in, or explore without an account</span></div>
+      <form class="card f" id="signin-form" data-active="false" style="max-width:420px;margin-top:12px;padding:16px">
         <label>Password<input class="f" id="pw" type="password" autocomplete="current-password" required></label>
         <div class="row"><button class="a go" type="submit">Sign in</button>
           <button class="a" type="button" id="guest">Explore without an account</button><span class="hint" id="signin-err"></span></div>
@@ -187,6 +257,15 @@
 </main>
 
 <div id="toasts" aria-live="polite"></div>
+<div id="tour" hidden>
+  <div class="tour-ring"></div>
+  <div class="tour-tip" role="dialog" aria-modal="true" aria-labelledby="tour-t">
+    <div class="c" id="tour-c"></div><div class="t" id="tour-t"></div><p id="tour-p"></p>
+    <div class="row"><button class="a" data-tour="skip">Close</button><span style="flex:1"></span>
+      <button class="a" data-tour="back">Back</button><button class="a go" data-tour="next">Next</button></div>
+    <div class="dots" id="tour-dots"></div>
+  </div>
+</div>
 
 <script>
 const SCHEMA = "receivables-pool-v1";
@@ -210,7 +289,7 @@ function toast(kind, title, detail) {
   el.className = `toast ${kind}`;
   el.innerHTML = `${esc(title)}${detail ? `<span class="mono">${esc(detail)}</span>` : ""}`;
   document.getElementById("toasts").append(el);
-  setTimeout(() => el.remove(), kind === "err" ? 12000 : 7000);
+  setTimeout(() => { el.classList.add("leave"); setTimeout(() => el.remove(), 200); }, kind === "err" ? 12000 : 7000);
 }
 
 async function act(name, body, button, label) {
@@ -232,17 +311,21 @@ async function act(name, body, button, label) {
 }
 
 // ---- building blocks
-const table = (title, head, rows, opts = {}) => `<div class="card flush">
+// a row's identity is its content: a row seen for the first time gets a short highlight
+const rowKey = (r) => { let h = 0; for (const ch of r.join("|")) h = (h * 31 + ch.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+const seenRows = new Set();
+let firstPaint = true;
+const table = (title, head, rows, opts = {}) => `<div class="card flush" data-card="${esc(title)}">
   <div class="card-head"><span class="eyebrow">${esc(title)}</span><span class="tag${opts.tag ?? ""}">${rows.length}</span></div>
   ${rows.length ? `<table class="data"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
-    <tbody>${rows.map((r) => `<tr${opts.alert ? ' class="alert"' : ""}>${r.map((c, i) => `<td${i === r.length - 1 && opts.action ? ' class="act"' : ""}>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+    <tbody>${rows.map((r, n) => `<tr${opts.alert ? ' class="alert"' : ""}${` data-k="${rowKey(r)}"`}>${r.map((c, i) => `<td${i === r.length - 1 && opts.action ? ' class="act"' : ""}>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`
   : `<div class="empty">${esc(opts.empty ?? "Nothing here.")}</div>`}</div>`;
 const btn = (op, cidv, label, cls = "") => guest ? "" : `<button class="a ${cls}" data-op="${op}" data-cid="${esc(cidv)}">${esc(label)}</button>`;
 
 // Forms are built once per sign-in; tables are repainted only when their content changes,
 // so nothing being typed is ever wiped by the refresh.
 function forms() {
-  if (guest) return `<div class="card"><p class="eyebrow">Read-only view</p><p class="small body-muted" style="margin:10px 0 0">You are seeing
+  if (guest) return `<div class="card" data-readonly><p class="eyebrow">Read-only view</p><p class="small body-muted" style="margin:10px 0 0">You are seeing
     exactly what the ledger shows the ${esc(orgOf(org).label.toLowerCase())}, and nothing it does not. Sign in with this organisation's account to act.</p>
     <div class="row" style="margin-top:12px"><button class="a go" id="to-signin">Sign in to act</button></div></div>`;
   if (org === "ORIGINATOR") {
@@ -338,11 +421,32 @@ function paint() {
   if (!holder) return;
   const cards = tables();
   // repaint card by card, only when it changed
-  if (holder.children.length !== cards.length) holder.innerHTML = cards.map(() => "<div></div>").join("");
+  if (holder.children.length !== cards.length) holder.innerHTML = cards.map((_, i) => `<div class="enter" style="--i:${i + 1}"></div>`).join("");
   cards.forEach((html, i) => { const slot = holder.children[i]; if (slot.dataset.html !== html) { slot.innerHTML = html; slot.dataset.html = html; } });
+  for (const tr of holder.querySelectorAll("tr[data-k]")) {
+    if (!firstPaint && !seenRows.has(tr.dataset.k)) tr.classList.add("fresh");
+    seenRows.add(tr.dataset.k);
+  }
+  if (data.offset) firstPaint = false;
   paintDeleg();
-  const b = document.getElementById("balance");
-  if (b && balance !== null) b.textContent = `${num(balance)} ${cfg.unit}`;
+  // the next thing to do breathes, until the user acts
+  document.querySelectorAll("#ws .cue").forEach((x) => x.classList.remove("cue"));
+  (document.querySelector("#tables button.go[data-op]") ?? document.querySelector('#ws form button.go[type="submit"]'))?.classList.add("cue");
+  countTo(document.getElementById("balance"), balance);
+}
+
+// numbers glide to their new value instead of jumping
+function countTo(el, to) {
+  if (!el || to === null) return;
+  const from = Number(el.dataset.v ?? to), start = performance.now(), dur = 700;
+  el.dataset.v = to;
+  if (from === to || matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = `${num(to)} ${cfg.unit}`; return; }
+  const tick = (now) => {
+    const k = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - k, 4); // ease-out quart
+    el.textContent = `${num(from + (to - from) * e)} ${cfg.unit}`;
+    if (k < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 function workspace() {
@@ -351,11 +455,11 @@ function workspace() {
     ? `<button class="a" data-op="fund">Top up ${Math.min(50, cfg.maxFund)} ${esc(cfg.unit)} from treasury</button>` : "";
   const side = forms();
   document.getElementById("ws").innerHTML = `
-    <div class="head row" style="justify-content:space-between;align-items:flex-end">
+    <div class="head row enter" style="justify-content:space-between;align-items:flex-end;--i:0">
       <div><h1>${esc(o.label)}</h1><p class="body-muted small">${esc(o.blurb)}</p></div>
       ${MONEY.includes(org) ? `<div style="text-align:right"><div class="eyebrow">Balance</div><div class="bal" id="balance">…</div><div style="margin-top:8px">${topUp}</div></div>` : ""}
     </div>
-    <div class="cols" style="margin-top:18px">${side ? `<div>${side}</div>` : ""}<div id="tables" style="display:grid;gap:16px"></div></div>`;
+    <div class="cols" style="margin-top:18px">${side ? `<div class="enter" style="--i:1">${side}</div>` : ""}<div id="tables" style="display:grid;gap:16px"></div></div>`;
   paint();
 }
 
@@ -372,13 +476,17 @@ function render() {
   if (o) {
     document.getElementById("org-label").textContent = o.label;
     document.getElementById("org-blurb").textContent = o.blurb;
-    data = { contracts: [] }; balance = null;
+    data = { contracts: [] }; balance = null; seenRows.clear(); firstPaint = true;
     workspace();
-    refresh();
+    refresh().then(() => tab === "workspace" && autoGuide(700));
   } else {
-    document.getElementById("orgs").innerHTML = cfg.orgs.map((x) =>
-      `<button type="button" class="orgpick" data-pick="${x.key}" aria-pressed="${picked === x.key}"><div class="l">${esc(x.label)}</div><div class="b">${esc(x.blurb)}</div></button>`).join("");
+    document.getElementById("orgs").innerHTML = cfg.orgs.map((x, i) =>
+      `<button type="button" class="orgpick enter" style="--i:${i}" role="radio" data-pick="${x.key}" aria-pressed="${picked === x.key}" aria-checked="${picked === x.key}">
+        <span class="radio" aria-hidden="true"></span><div class="l">${esc(x.label)}</div><div class="b">${esc(x.blurb)}</div>
+        <div class="go-hint">${picked === x.key ? "Selected" : "Select"}</div></button>`).join("");
+    pickState();
     if (!cfg.signIn) document.getElementById("signin-err").textContent = "Sign-in is not configured on this instance.";
+    if (tab === "workspace") autoGuide(900);
   }
 }
 
@@ -403,13 +511,30 @@ async function matrix() {
   } catch (e) { document.getElementById("matrix").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
+// step 1 done once an organisation is chosen; step 2 wakes up and names it
+function pickState() {
+  const o = picked && orgOf(picked);
+  document.getElementById("step1").classList.toggle("done", Boolean(o));
+  document.getElementById("signin-form").dataset.active = String(Boolean(o));
+  document.getElementById("step2-text").textContent = o ? `Sign in as ${o.label.toLowerCase()}, or explore its workspace read-only` : "Then sign in, or explore without an account";
+  document.getElementById("signin-err").textContent = "";
+}
+
 // ---- events
 const sha256 = async (text) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
 const normalise = (f) => `${SCHEMA}|contract=${f.contract.trim().toUpperCase()}|debtor=${f.debtor.trim().toLowerCase()}|nominal=${Number(f.nominal)}|origination=${f.origination}`;
 
 document.addEventListener("click", async (e) => {
   const pick = e.target.closest("[data-pick]");
-  if (pick) { picked = pick.dataset.pick; document.querySelectorAll("[data-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b === pick))); return document.getElementById("pw").focus(); }
+  if (pick) {
+    picked = pick.dataset.pick;
+    document.querySelectorAll("[data-pick]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b === pick)); b.setAttribute("aria-checked", String(b === pick));
+      b.querySelector(".go-hint").textContent = b === pick ? "Selected" : "Select";
+    });
+    pickState();
+    return document.getElementById("pw").focus({ preventScroll: true });
+  }
   const b = e.target.closest("button");
   if (!b) return;
   if (b.id === "signout" || b.id === "to-signin") {
@@ -467,10 +592,118 @@ document.addEventListener("submit", async (e) => {
   if (f.dataset.form === "propose") await act("propose", { schemaId: SCHEMA, hash: v.hash.trim(), amount: v.amount, rate: v.rate, maturity: v.maturity }, button, "Facility proposed to the borrower");
 });
 
-function go(tab) {
-  document.querySelectorAll("a.nav").forEach((x) => x.setAttribute("aria-current", String(x.dataset.tab === tab)));
-  document.querySelectorAll(".page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== tab));
-  if (tab === "visibility") matrix();
+// ---- the guide: one element in the spotlight at a time, one sentence each, steps that are not on screen are skipped
+const GUIDES = {
+  signin: [
+    ["#orgs", "Choose your organisation", "Click the card of the organisation you represent. Each one only ever sees its own contracts."],
+    ["#signin-form", "Sign in to act", "Enter that organisation's password to work in its workspace."],
+    ["#guest", "No account?", "Explore opens the same workspace read-only, exactly as the ledger shows it to that organisation."],
+    ['a[data-tab="visibility"]', "Who sees what", "A public table of what each organisation holds, without a single amount or name."],
+  ],
+  ORIGINATOR: [
+    ["[data-readonly]", "Read-only view", "You can look at everything here. Sign in with the borrower's account to act."],
+    ['[data-form="fingerprint"]', "Register a collateral file", "Fill in the file's identifying fields. Its fingerprint is computed in your browser, the file never leaves."],
+    ["[data-share]", "Share the fingerprint", "After registering, copy the fingerprint and send it to the lenders you are talking to."],
+    ['[data-card="Facility proposals to review"]', "Review the proposals", "Lenders' offers arrive here. Accept one to sign the facility with that lender."],
+    ['[data-card="Facilities"]', "Your facilities", "Every signed facility, with its lender, amount, rate and maturity. No lender sees another's."],
+    ["#balance", "Funds received", "Each draw a lender makes on your facility lands here."],
+  ],
+  LENDER: [
+    ["[data-readonly]", "Read-only view", "You can look at everything here. Sign in with this lender's account to act."],
+    ["#balance", "Your balance", "Real Canton Coin on Canton DevNet. Top up from the treasury if you need more."],
+    ['[data-form="propose"]', "Propose a facility", "Paste the fingerprint the borrower sent you, set the terms and send the proposal."],
+    ['[data-card="Facilities"]', "Draw on a facility", "Draw: the registry checks the collateral and releases your funds in the same transaction."],
+    ['[data-card="Double-pledge alerts"]', "Double-pledge alerts", "If the collateral already secures another lender's draw, the draw stops here and no money moves."],
+    ['[data-card="Live pledges"]', "Live pledges", "Collateral your draws are holding. Release it once the borrower has repaid."],
+    ['[data-card="Funds reserved for a draw"]', "Reserved funds", "Money set aside for a draw. If the draw was stopped, release it back to your balance."],
+  ],
+  REGISTRY: [
+    ["[data-readonly]", "Read-only view", "You can look at everything here. Sign in with the registry operator's account to act."],
+    ["[data-deleg]", "Automation", "Checks run automatically under this delegation. Switching it off stops every draw."],
+    ['[data-card="Collateral index"]', "The collateral index", "One line per fingerprint: free, or pledged to one lender. You never see a loan's terms."],
+    ['[data-card="Double pledges stopped"]', "Double pledges stopped", "Every draw that met an already pledged collateral, and who was told."],
+  ],
+  AUDITOR: [
+    ['[data-card="Double pledges stopped"]', "Double pledges stopped", "Each attempt to pledge the same collateral twice, when it happened and which lender was told. Loan terms stay private."],
+    ['a[data-tab="visibility"]', "Who sees what", "Check that the ledger never showed you a single loan."],
+  ],
+  visibility: [
+    ["#matrix", "Counted from the ledger", "Each column is what one organisation's own ledger view holds, kind by kind."],
+    ["#matrix tr:nth-child(3)", "The row to read", "Facility: the borrower and each lender hold their own, the registry operator and the auditor hold none."],
+  ],
+  governance: [
+    ['[data-page="governance"] .grid', "Automatic, or approved", "Everyday checks are automatic. Anything sensitive needs two members out of three."],
+    ['[data-page="governance"] details', "Enforced by the ledger", "A decision approved by one member only is rejected by Canton itself."],
+  ],
+};
+let tab = "workspace";
+const guideKey = () => tab !== "workspace" ? tab : !org ? "signin" : org.startsWith("LENDER") ? "LENDER" : org;
+const visible = (el) => { const r = el?.getBoundingClientRect(); return Boolean(r && r.width > 0 && r.height > 0); };
+const tour = { steps: [], i: 0, key: "" };
+
+function startGuide(auto = false) {
+  const key = guideKey();
+  const steps = (GUIDES[key] ?? []).filter(([sel]) => visible(document.querySelector(sel)));
+  if (!steps.length) return;
+  if (auto) { try { if (localStorage.getItem(`pg.guide.${key}`)) return; localStorage.setItem(`pg.guide.${key}`, "1"); } catch { /* storage blocked */ } }
+  Object.assign(tour, { steps, i: 0, key });
+  document.getElementById("tour").hidden = false;
+  showStep(true);
+}
+function endGuide() { document.getElementById("tour").hidden = true; }
+
+async function showStep(first = false) {
+  const tip = document.querySelector(".tour-tip"), ring = document.querySelector(".tour-ring");
+  const [sel, title, text] = tour.steps[tour.i];
+  const el = document.querySelector(sel);
+  if (!first) { tip.classList.add("out"); await new Promise((r) => setTimeout(r, 160)); } // exit faster than the entrance
+  el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  await new Promise((r) => setTimeout(r, 260));
+  document.getElementById("tour-c").textContent = `${tour.i + 1} of ${tour.steps.length}`;
+  document.getElementById("tour-t").textContent = title;
+  document.getElementById("tour-p").textContent = text;
+  document.getElementById("tour-dots").innerHTML = tour.steps.map((_, n) => `<i class="${n === tour.i ? "on" : ""}"></i>`).join("");
+  document.querySelector('[data-tour="back"]').disabled = tour.i === 0;
+  document.querySelector('[data-tour="next"]').textContent = tour.i === tour.steps.length - 1 ? "Done" : "Next";
+  place(el);
+  tip.classList.remove("out");
+  document.querySelector('[data-tour="next"]').focus({ preventScroll: true });
+}
+function place(el) {
+  const r = el.getBoundingClientRect(), pad = 6, ring = document.querySelector(".tour-ring"), tip = document.querySelector(".tour-tip");
+  ring.style.width = `${r.width + pad * 2}px`; ring.style.height = `${r.height + pad * 2}px`;
+  ring.style.transform = `translate(${r.left - pad}px, ${r.top - pad}px)`;
+  const tw = tip.offsetWidth, th = tip.offsetHeight, gap = 14;
+  const below = r.bottom + gap + th < innerHeight;
+  const top = below ? r.bottom + gap : Math.max(12, r.top - gap - th);
+  const left = Math.min(Math.max(12, r.left), innerWidth - tw - 12);
+  tip.style.left = `${left}px`; tip.style.top = `${Math.min(top, innerHeight - th - 12)}px`;
+}
+addEventListener("resize", () => { if (!document.getElementById("tour").hidden) place(document.querySelector(tour.steps[tour.i][0])); });
+document.addEventListener("keydown", (e) => {
+  if (document.getElementById("tour").hidden) return;
+  if (e.key === "Escape") endGuide();
+  if (e.key === "ArrowRight") document.querySelector('[data-tour="next"]').click();
+  if (e.key === "ArrowLeft" && tour.i > 0) document.querySelector('[data-tour="back"]').click();
+});
+document.getElementById("tour").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-tour]")?.dataset.tour;
+  if (t === "skip") return endGuide();
+  if (t === "back" && tour.i > 0) { tour.i--; return showStep(); }
+  if (t === "next") { if (tour.i === tour.steps.length - 1) return endGuide(); tour.i++; return showStep(); }
+});
+document.getElementById("help").addEventListener("click", () => startGuide(false));
+// the first time a page or a workspace appears, its guide plays once by itself
+let autoTimer;
+const autoGuide = (ms) => { clearTimeout(autoTimer); autoTimer = setTimeout(() => startGuide(true), ms); };
+
+function go(to) {
+  tab = to;
+  endGuide();
+  document.querySelectorAll("a.nav").forEach((x) => x.setAttribute("aria-current", String(x.dataset.tab === to)));
+  document.querySelectorAll(".page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== to));
+  if (to === "visibility") matrix();
+  if (to !== "workspace") autoGuide(to === "visibility" ? 1600 : 900);
 }
 document.querySelectorAll("a.nav").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); history.replaceState(null, "", `#${a.dataset.tab}`); go(a.dataset.tab); }));
 

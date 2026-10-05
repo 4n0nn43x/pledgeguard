@@ -1,9 +1,9 @@
 -- Registry side of PledgeGuard: what the neutral registry party signs and sees.
 -- The registry never holds a Facility. It only sees fingerprints (schemaId + hash),
 -- one index contract per hash, one claim per live draw, and collision notices.
--- Vocabulary follows CIP #245 (schemaId, hash). Contract keys are gone in LF 2.2,
+-- Vocabulary: schemaId names the normalised field set, hash its sha256. Contract keys are gone in LF 2.2,
 -- so per-hash uniqueness is enforced by the registry being the sole signatory of
--- ClaimIndex and creating exactly one per hash (answer to CIP #245 open question 4).
+-- ClaimIndex and creating exactly one per hash.
 module PledgeGuard.Registry where
 
 -- | Originator's attestation: "this collateral file exists and has this fingerprint".

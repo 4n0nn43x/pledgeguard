@@ -66,7 +66,7 @@
       PledgeGuard
     </a>
     <nav>
-      <a href="/app">Live views</a>
+      <a href="/app">Platform</a>
       <a href="#problem">Problem</a>
       <a href="#canton">Why Canton</a>
       <a href="#mechanism">Mechanism</a>
@@ -91,9 +91,13 @@
           a colliding draw simply does not fund.
         </p>
         <div class="cta">
-          <a class="btn primary" href="#mechanism">Explore the mechanism</a>
+          <a class="btn primary" href="/app">Open the platform</a>
+          <a class="btn" href="#mechanism">How it works</a>
           <a class="btn" href="#proof">See it on the ledger</a>
+          <a class="btn" href="https://github.com/4n0nn43x/pledgeguard">Read the code</a>
         </div>
+        <p class="small body-muted" style="margin:12px 0 0">Live on Canton DevNet. No account needed to look around:
+          open the platform, pick an organisation, choose Explore.</p>
         <div class="pills">
           <span class="tag">Privacy preserving</span>
           <span class="tag">Atomic</span>
@@ -120,19 +124,19 @@
         <text x="157" y="127" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.4" fill="#858994">REGISTRY</text>
         <text x="157" y="147" font-family="Inter, sans-serif" font-size="12" fill="#f5f3ea">sees the hash only</text>
 
-        <!-- lender A: the claim is free, the draw funds -->
+        <!-- first lender: the claim is free, the draw funds -->
         <path class="draw d2" d="M210 164 L210 196 L96 196 L96 252" fill="none" stroke="#3fb27f" stroke-width="1.2" marker-end="url(#ok)" pathLength="1"/>
         <rect x="24" y="254" width="144" height="62" rx="4" fill="#101216" stroke="rgba(63,178,127,.32)"/>
-        <text x="40" y="276" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.3" fill="#858994">LENDER A</text>
+        <text x="40" y="276" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.3" fill="#858994">FIRST LENDER</text>
         <text x="40" y="296" font-family="Inter, sans-serif" font-size="13" fill="#3fb27f">claim live · funded</text>
         <text x="40" y="310" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#5c616c">book private</text>
 
-        <!-- lender B: the same fingerprint, intercepted before it reaches the lender -->
+        <!-- second lender: the same fingerprint, intercepted before it reaches the lender -->
         <path class="draw d3" d="M210 164 L210 196 L324 196 L324 222" fill="none" stroke="#e5484d" stroke-width="1.2" pathLength="1"/>
         <line x1="303" y1="230" x2="345" y2="230" stroke="#e5484d" stroke-width="2.5"/>
         <path d="M324 238 L324 252" fill="none" stroke="#e5484d" stroke-width="1.2" stroke-dasharray="2 4" opacity=".4"/>
         <rect x="252" y="254" width="144" height="62" rx="4" fill="#101216" stroke="rgba(229,72,77,.32)"/>
-        <text x="268" y="276" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.3" fill="#858994">LENDER B</text>
+        <text x="268" y="276" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.3" fill="#858994">SECOND LENDER</text>
         <text x="268" y="296" font-family="Inter, sans-serif" font-size="13" fill="#e5484d">blocked · 0 transferred</text>
         <text x="268" y="310" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#5c616c">book private</text>
       </svg>
@@ -143,7 +147,7 @@
   <div class="ticker">
     <div class="wrap">
       <span class="item"><span class="eyebrow">Daml templates</span><span class="v">6</span></span>
-      <span class="item"><span class="eyebrow">Scenario transactions</span><span class="v">24</span></span>
+      <span class="item"><span class="eyebrow">Test-suite transactions</span><span class="v">24</span></span>
       <span class="item"><span class="eyebrow">Privacy assertions</span><span class="v">all passing</span></span>
       <span class="item"><span class="eyebrow">Registry threshold</span><span class="v">2 of 3</span></span>
       <span class="item"><span class="eyebrow">Settled on DevNet</span><span class="v">Canton Coin, cBTC</span></span>
@@ -169,8 +173,8 @@
           <div class="card-head"><span class="eyebrow">Today</span><span class="tag bad">undetectable</span></div>
           <div class="card-body">
             <table class="data">
-              <tr><td>Borrower pledges pool</td><td class="num">Lender A</td><td class="num">300</td></tr>
-              <tr><td>Same pool, same month</td><td class="num">Lender B</td><td class="num">300</td></tr>
+              <tr><td>Borrower pledges pool</td><td class="num">First lender</td><td class="num">300</td></tr>
+              <tr><td>Same pool, same month</td><td class="num">Second lender</td><td class="num">300</td></tr>
             </table>
             <p class="small body-muted" style="margin:14px 0 0">
               Two facilities. One collateral. No shared visibility, and no neutral place to ask
@@ -183,14 +187,14 @@
           <div class="card-head"><span class="eyebrow">With PledgeGuard</span><span class="tag ok">caught before funding</span></div>
           <div class="card-body">
             <dl class="grid" style="grid-template-columns:max-content 1fr;gap:8px 16px;font-family:var(--mono);font-size:12.5px;margin:0">
-              <dt class="body-muted">Lender A sees</dt><dd style="margin:0">its own facility</dd>
-              <dt class="body-muted">Lender B sees</dt><dd style="margin:0">its own facility</dd>
+              <dt class="body-muted">First lender sees</dt><dd style="margin:0">its own facility</dd>
+              <dt class="body-muted">Second lender sees</dt><dd style="margin:0">its own facility</dd>
               <dt class="body-muted">Registry sees</dt><dd style="margin:0;color:var(--accent)">7f8c…a92d</dd>
               <dt class="body-muted">Nobody sees</dt><dd style="margin:0" class="redacted">the other side's terms</dd>
             </dl>
             <p class="small body-muted" style="margin:14px 0 0">
-              Canton's own CIP #245 names this gap and asks who may hold the role that detects it.
-              It proposes no code. This is the answer.
+              No lender can see this collision on its own. A neutral registry that only ever sees
+              fingerprints can, and that is what PledgeGuard runs.
             </p>
           </div>
         </article>
@@ -294,24 +298,24 @@
           </div>
         </article>
         <article class="card view flush">
-          <div class="card-head"><span class="eyebrow">Lender A</span><span class="tag ok">funded</span></div>
+          <div class="card-head"><span class="eyebrow">First lender</span><span class="tag ok">funded</span></div>
           <div class="card-body">
             <dl class="rows">
               <dt>collateral</dt><dd style="color:var(--accent)">7f8c…a92d</dd>
               <dt>amount</dt><dd>300</dd>
               <dt>claim</dt><dd style="color:var(--green)">live</dd>
-              <dt>lender B</dt><dd class="redacted">does not exist here</dd>
+              <dt>second lender</dt><dd class="redacted">does not exist here</dd>
             </dl>
           </div>
         </article>
         <article class="card view flush">
-          <div class="card-head"><span class="eyebrow">Lender B</span><span class="tag bad">collision</span></div>
+          <div class="card-head"><span class="eyebrow">Second lender</span><span class="tag bad">collision</span></div>
           <div class="card-body">
             <dl class="rows">
               <dt>collateral</dt><dd style="color:var(--accent)">7f8c…a92d</dd>
               <dt>amount</dt><dd>180</dd>
               <dt>transferred</dt><dd style="color:var(--red)">0</dd>
-              <dt>lender A</dt><dd class="redacted">does not exist here</dd>
+              <dt>first lender</dt><dd class="redacted">does not exist here</dd>
             </dl>
           </div>
         </article>
@@ -399,7 +403,7 @@
       </div>
 
       <div class="grid cols-4">
-        <div class="card stat"><div class="k" data-count="24">0</div><div class="l eyebrow">Transactions in the scenario</div></div>
+        <div class="card stat"><div class="k" data-count="24">0</div><div class="l eyebrow">Transactions in the test suite</div></div>
         <div class="card stat"><div class="k" data-count="6">0</div><div class="l eyebrow">Daml templates</div></div>
         <div class="card stat"><div class="k">2 / 3</div><div class="l eyebrow">Registry governance</div></div>
         <div class="card stat"><div class="k" style="color:var(--red)">0</div><div class="l eyebrow">Colliding draws funded</div></div>
@@ -414,11 +418,11 @@
           <thead><tr><th>Offset</th><th>Update id</th><th>Event</th></tr></thead>
           <tbody>
             <tr><td class="num">1168752</td><td>12204252f8d1d8db…a6458a4</td><td>fingerprint registered, index opened</td></tr>
-            <tr><td class="num">1168794</td><td>12203923cfd38d57…2cfae06</td><td>lender A allocates 120 CC, executor is the registry</td></tr>
-            <tr><td class="num">1168810</td><td>12205c5d51c77d89…3ae1b44e</td><td style="color:var(--green)">draw A settles: index occupied, claim created, transfer executed, one transaction</td></tr>
-            <tr><td class="num">1168836</td><td>12200a26ada73333…c184a914</td><td style="color:var(--red)">draw B on the same fingerprint: no transfer, one notice per lender</td></tr>
-            <tr><td class="num">1168842</td><td>122060d4fac2b510…148a29bd</td><td>lender A repays, fingerprint released</td></tr>
-            <tr><td class="num">1168872</td><td>1220e5d5d49735d1…752d6374</td><td>lender B retries and settles</td></tr>
+            <tr><td class="num">1168794</td><td>12203923cfd38d57…2cfae06</td><td>first lender allocates 120 CC, executor is the registry</td></tr>
+            <tr><td class="num">1168810</td><td>12205c5d51c77d89…3ae1b44e</td><td style="color:var(--green)">first draw settles: index occupied, claim created, transfer executed, one transaction</td></tr>
+            <tr><td class="num">1168836</td><td>12200a26ada73333…c184a914</td><td style="color:var(--red)">second lender draws on the same fingerprint: no transfer, one notice per lender</td></tr>
+            <tr><td class="num">1168842</td><td>122060d4fac2b510…148a29bd</td><td>first lender repays, fingerprint released</td></tr>
+            <tr><td class="num">1168872</td><td>1220e5d5d49735d1…752d6374</td><td>second lender retries and settles</td></tr>
           </tbody>
         </table>
       </div>
@@ -432,7 +436,7 @@
         <div class="card">
           <p class="eyebrow">Reproduce on DevNet</p>
           <p class="mono small" style="margin:12px 0 0;color:var(--muted)">AMULET=1 ./scripts/devnet.sh scenario<br>CBTC=1 ./scripts/devnet.sh scenario</p>
-          <p class="small body-muted" style="margin:12px 0 0">The same flow against the shared HackCanton node, settling real Canton Coin or real cBTC.</p>
+          <p class="small body-muted" style="margin:12px 0 0">The same flow on Canton DevNet, settling real Canton Coin or real cBTC.</p>
         </div>
         <div class="card">
           <p class="eyebrow">Honest limits</p>
@@ -452,8 +456,8 @@
       <h2 class="h2">Built for the desks moving collateral on-chain this quarter.</h2>
       <p class="lead">Receivables and warehouse lenders, private credit, and the collateral venues arriving with tokenised settlement.</p>
       <div class="cta">
-        <a class="btn primary" href="/app">Open the live party views</a>
-        <a class="btn" href="https://github.com/canton-foundation/cips/pull/245">Read CIP #245</a>
+        <a class="btn primary" href="/app">Open the platform</a>
+        <a class="btn" href="https://github.com/4n0nn43x/pledgeguard">Read the code</a>
       </div>
     </div>
   </section>
@@ -461,7 +465,7 @@
 
 <footer>
   <div class="wrap">
-    <span class="eyebrow">PledgeGuard <span class="n">·</span> HackCanton Season 3 <span class="n">·</span> RWA and business workflows</span>
+    <span class="eyebrow">PledgeGuard <span class="n">·</span> Collateral collision registry on Canton</span>
     <span class="eyebrow" style="margin-left:auto">Built on Canton Network</span>
   </div>
 </footer>
@@ -471,7 +475,7 @@
   const OUTCOMES = {
     1: [["Input", "receivables-pool-v1"], ["Normalised fields", "contract no, debtor, nominal, origination"], ["Output", "sha-256, 64 hex"], ["On the ledger", "hash and schema, no amount"]],
     2: [["Signatories", "lender and borrower"], ["Carries", "amount, rate, maturity, fingerprint"], ["Registry", "not a stakeholder"], ["Other lenders", "contract does not exist for them"]],
-    3: [["Instrument", "any CIP-56 asset"], ["Sender", "the lender"], ["Receiver", "the borrower"], ["Executor", "the PledgeGuard registry"]],
+    3: [["Instrument", "any Canton token-standard asset"], ["Sender", "the lender"], ["Receiver", "the borrower"], ["Executor", "the PledgeGuard registry"]],
     5: [["Trigger", "repayment"], ["Effect", "claim archived, index freed"], ["Next draw", "settles normally"], ["Notices", "stay with the auditor"]],
   };
   const outcome = document.getElementById("outcome");

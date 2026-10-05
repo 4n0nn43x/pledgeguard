@@ -1,7 +1,7 @@
 # PledgeGuard
 
 Privacy-preserving collateral collision registry on Canton Network.
-HackCanton Season #3, track RWA & Business Workflows. Answer to [CIP #245](https://github.com/canton-foundation/cips/pull/245) open question 4.
+HackCanton Season #3, track RWA & Business Workflows.
 
 **The problem.** The same collateral (a receivables pool, a loan pack) gets pledged to several lenders and nobody can tell: Tricolor cost JPMorgan a $170M charge-off, First Brands double-financed receivables into a ~$10B bankruptcy. On a transparent chain the collision is visible but so is every lender's book. On Canton the books are private, so the collision is invisible too.
 
@@ -12,7 +12,7 @@ HackCanton Season #3, track RWA & Business Workflows. Answer to [CIP #245](https
 ### DevNet evidence, run of 25 Sep 2026, real Canton Coin
 
 Node `hackcanton-devnet-3`, Ledger API 3.5.18, package `pledgeguard 0.3.0` vetted, six parties
-under the namespace `64bf737a-`. The draw leg is a **real CIP-56 allocation of Canton Coin**
+under the namespace `64bf737a-`. The draw leg is a **real Canton token-standard allocation of Canton Coin**
 (`AmuletAllocation`), created by the lender through the Amulet registry's
 `AllocationFactory_Allocate` and executed by PledgeGuard's registry inside the collision check.
 Fingerprint of this run: `0020e22f1d7b5ec3ca5b0ccdb9ed0c1224638546b32eee4f38e3b9eedb36d32b`.
@@ -68,7 +68,7 @@ This matrix is not a UI filter: it is what each party's participant returns from
 3. The lender allocates the stablecoin leg through the instrument's own registry (for Canton Coin:
    `AllocationFactory_Allocate` with the choice context the Amulet registry serves over HTTP),
    sender = lender, receiver = originator, executor = the PledgeGuard registry. Then it exercises
-   `Facility_RequestDraw`. Any CIP-56 instrument works the same way: USDCx, USD1, a tokenised deposit.
+   `Facility_RequestDraw`. Any Canton token-standard instrument works the same way: USDCx, USD1, a tokenised deposit.
 4. The registry exercises `DrawRequest_Settle`, passing the registry's execute-transfer choice
    context and its disclosed contracts. Authority inside the choice is {lender, originator}
    (signatories) + {registry} (controller), exactly the three controllers of `Allocation_ExecuteTransfer`.
@@ -88,8 +88,8 @@ Honest scope: index admission is delegated in v1 (a rogue `ops` could open two i
 ## Why Canton and not the chain you already use
 
 - Sub-transaction privacy gives each lender its own projection; the registry is a stakeholder of `DrawRequest` and `Claim`, never of `Facility`.
-- Contract keys are absent in LF 2.2 and non-unique in 2.3, so cross-contract uniqueness can only come from a signatory registry party. CIP #245 asks who may hold that role and under what governance. Answer: a market utility whose party is decentralized.
-- Settlement uses the CIP-56 token standard `Allocation` interface, so the draw works with Amulet, USDCx or any conforming instrument.
+- Contract keys are absent in LF 2.2 and non-unique in 2.3, so cross-contract uniqueness can only come from a signatory registry party. PledgeGuard makes that party a market utility whose identity is decentralized.
+- Settlement uses the Canton token standard `Allocation` interface, so the draw works with Amulet, USDCx or any conforming instrument.
 
 ## Layout
 
@@ -130,13 +130,20 @@ git clone -b hackathon https://github.com/DLC-link/decentralization-manager ../d
 
 If your host already uses port 5432, start the sandbox with `DB_PORT=5433 ./hackathon/up.sh`.
 
-### The dashboard
+### The platform
 
-Live at **https://pledgeguard.fyra.fun/app**. The whole workflow runs from the browser, no script:
-register a collateral file (the sha256 is computed in the browser, the file never leaves), propose and
-accept facilities, draw in real Canton Coin, watch the collision, withdraw the stuck allocation, repay,
-retry, fund a lender, grant or revoke the registry delegation. A step-by-step guide on top follows the
-fingerprint in play, and every action shows its update id and offset.
+Live on Canton DevNet at **https://pledgeguard.fyra.fun/app**. Each organisation signs in with its own
+account and sees only its own workspace, filled from its own `/v2/state/active-contracts`:
+
+| Organisation | Its workspace |
+|---|---|
+| Borrower | register a collateral file (the sha256 is computed in the browser, the file never leaves), review and accept facility proposals |
+| First lender, second lender | propose a facility, draw in real Canton Coin, double-pledge alerts, live pledges (repaid, release), reserved funds (release), treasury top-up |
+| Registry operator | the collateral index (free or pledged, to whom), stopped double pledges, the draw queue, the automation delegation (grant, revoke) |
+| Auditor | stopped double pledges, without loan terms |
+
+The public **Visibility** page counts the active contracts each organisation holds, per contract kind,
+with no amount, rate or name: the Facility row is empty for the registry operator and the auditor.
 
 ```sh
 node frontend/server.mjs     # http://localhost:8090/app, reads scripts/.devnet.env
@@ -144,27 +151,23 @@ node backend/registry.mjs    # the registry automation, with the same env (see c
 docker compose up -d --build # both, as deployed: hardened containers behind the shared Caddy
 ```
 
-Reading is public: one column per party, refreshed every 4 seconds, plus a "VIEWING AS" selector.
-Nothing is filtered by role in the page: each column is one `/v2/state/active-contracts` call for that
-party and shows whatever comes back (the "this fingerprint only" box hides earlier runs). Select the
-auditor and the screen holds collision notices and nothing else.
+Access model: a signed `HttpOnly; Secure; SameSite=Strict` session names the organisation. The server
+reads that organisation's party only and runs the fixed actions of its role (a lender calling a borrower
+action gets 403), validated, one at a time. Origin check, 10 sign-in attempts per 15 minutes, 30 actions
+a minute, draws capped at `MAX_DRAW` (50 CC). Accounts for the judges come with the submission.
 
-Acting needs the demo password (`DEMO_PASSWORD`, given to the judges with the submission). The server
-then runs a fixed set of validated actions and picks the acting party itself; the browser never sends
-a command or a party id. Session in a signed `HttpOnly; Secure; SameSite=Strict` cookie, origin check,
-10 sign-in attempts per 15 minutes, 30 actions a minute, draws capped at `MAX_DRAW` (50 CC).
-
-Honest note: the demo drives all parties from one ledger user that has `CanActAs` on each of
-them, because the shared DevNet node gives every team one user. The separation on screen is not
-that user's permissions, it is Canton's projection: the query is per party, and a party that is
-not a stakeholder of a contract never receives it. On LocalNet the same views run against three
-different participants, which removes the doubt entirely.
+Hosting note: on Canton DevNet the five organisations are hosted on one participant node and
+operated through one ledger user with `CanActAs` on each party, because the DevNet node gives one
+user per team. The separation is not that user's permissions, it is Canton's projection: each read
+is for one party, and a party that is not a stakeholder of a contract never receives it. In
+production each organisation runs its own participant; on LocalNet the same flow already runs
+across three participants.
 
 ## Known limits (v1)
 
 - On LocalNet the draw leg is a mock `Allocation` (same interface and controllers as Amulet/USDCx). On DevNet it is a real Canton Coin or cBTC allocation.
 - One index per hash is enforced by the registry automation, not by the Daml model (LF 2.2 has no contract keys). A rogue `ops` could still open a second index (see "Honest scope" above).
-- The public demo URL is read-only: its proxy relays only `active-contracts` and `ledger-end`, because the demo token can act as every party.
+- The platform never relays raw ledger calls: each organisation reads its own party through the server, and acts through a fixed set of role-checked actions, because the ledger token can act as every party of the deployment.
 - The registry sees draw amounts (see above). A two-phase clearance would hide them but is not atomic.
-- A matching fingerprint proves the same file was presented twice; it does not catch a freshly fabricated file describing the same collateral (CIP #245 says the same).
+- A matching fingerprint proves the same file was presented twice; it does not catch a freshly fabricated file describing the same collateral.
 - Repayment is off the contract in v1: the lender releases the claim once repaid.

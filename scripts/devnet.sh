@@ -46,7 +46,7 @@ JSON_API=${JSON_API:-https://ledger-api-json.participant.hackcanton-01.devnet.na
 OIDC=${OIDC:-https://keycloak.naas.noders.services/realms/noders-appsfactory/protocol/openid-connect/token}
 CLIENT_ID=${CLIENT_ID:-web-app-ui-hackcanton-01-devnet}
 TOKEN_CACHE=$HERE/.devnet.token
-# The instrument the draw settles in. Any CIP-56 registry works; two are wired here.
+# The instrument the draw settles in. Any Canton token-standard registry works; two are wired here.
 #   AMULET=1  Canton Coin, registry = the public DevNet scan
 #   CBTC=1    cBTC (BitSafe), registry = the DA utility registrar for the cbtc-network party,
 #             which is itself a Decentralized Party. Faucet: https://cbtc-faucet.bitsafe.finance/
@@ -109,7 +109,7 @@ exercise() { submit "$1" "$(jq -n --arg t "$2" --arg c "$3" --arg ch "$4" --argj
 
 # ---- Amulet, through the token standard. The registry serves the choice context and the
 # reference contracts (AmuletRules, open rounds) that every choice needs; we pass them as
-# disclosed contracts. Same interfaces any CIP-56 instrument implements.
+# disclosed contracts. Same interfaces any Canton token-standard instrument implements.
 WALLET=${WALLET:-}
 wallet_party() { [ -n "$WALLET" ] || WALLET="$(claim sub)::${REGISTRY#*::}"; echo "$WALLET"; }
 # The instrument admin: given for cBTC, read from the registry for Canton Coin.

@@ -154,7 +154,13 @@ docker compose up -d --build # both, as deployed: hardened containers behind the
 Access model: a signed `HttpOnly; Secure; SameSite=Strict` session names the organisation. The server
 reads that organisation's party only and runs the fixed actions of its role (a lender calling a borrower
 action gets 403), validated, one at a time. Origin check, 10 sign-in attempts per 15 minutes, 30 actions
-a minute, draws capped at `MAX_DRAW` (50 CC). Accounts for the judges come with the submission.
+a minute, draws capped at `MAX_DRAW` (50 CC).
+
+Jury access: one access code (`JUDGE_CODE`, given with the submission) signs in as any organisation and runs
+every action of its role, so a judge can play the whole workflow alone. Switching the registry's automation
+on or off stays with the registry's own members, so no visitor can stop the platform for the others.
+Treasury top-ups never take the treasury below `FUND_FLOOR` (100 CC), and actions are also rate limited per
+address. Without an account, "Explore" opens any organisation's workspace read-only.
 
 Hosting note: on Canton DevNet the five organisations are hosted on one participant node and
 operated through one ledger user with `CanActAs` on each party, because the DevNet node gives one

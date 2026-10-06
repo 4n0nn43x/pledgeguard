@@ -51,9 +51,13 @@ const LENDERS = ["LENDER_A", "LENDER_B"];
 // ---- instrument (Canton token standard registry)
 const INSTRUMENT = env.INSTRUMENT ?? "amulet";
 const CBTC_ADMIN = env.CBTC_ADMIN ?? "cbtc-network::12202a83c6f4082217c175e29bc53da5f2703ba2675778ab99217a5a881a949203ff";
-const TOKEN_REGISTRY = (env.TOKEN_REGISTRY_URL ?? (INSTRUMENT === "cbtc"
+// One or more registry base URLs, comma separated: a scan that lags behind the network answers 404 for a
+// contract the others already see, so the next one is tried.
+const TOKEN_REGISTRIES = (env.TOKEN_REGISTRY_URL ?? (INSTRUMENT === "cbtc"
   ? `https://api.utilities.digitalasset-dev.com/api/token-standard/v0/registrars/${CBTC_ADMIN}`
-  : "https://scan.sv-1.dev.global.canton.network.digitalasset.com")).replace(/\/$/, "");
+  : "https://scan.sv-1.dev.global.canton.network.digitalasset.com,https://scan.sv-2.dev.global.canton.network.digitalasset.com"))
+  .split(",").map((u) => u.trim().replace(/\/$/, "")).filter(Boolean);
+const TOKEN_REGISTRY = TOKEN_REGISTRIES[0];
 const INSTRUMENT_ID = INSTRUMENT === "cbtc" ? "CBTC" : "Amulet";
 const UNIT = INSTRUMENT === "cbtc" ? "cBTC" : "CC";
 const MAX_DRAW = Number(env.MAX_DRAW ?? 50);
@@ -114,9 +118,15 @@ const iso = (ms = 0) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$
 const disclosedOf = (ctx) => (ctx?.disclosedContracts ?? []).map(({ templateId, contractId, createdEventBlob, synchronizerId }) => ({ templateId, contractId, createdEventBlob, synchronizerId }));
 
 async function registry(path, body = {}) {
-  const r = await fetch(TOKEN_REGISTRY + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) throw Object.assign(new Error(`token registry ${r.status}: ${(await r.text()).slice(0, 200)}`), { status: 502 });
-  return r.json();
+  let err;
+  for (const base of TOKEN_REGISTRIES) {
+    try {
+      const r = await fetch(base + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+      if (r.ok) return r.json();
+      err = Object.assign(new Error(`token registry ${r.status}: ${(await r.text()).slice(0, 200)}`), { status: 502 });
+    } catch (e) { err = e.status ? e : Object.assign(new Error(`token registry unreachable: ${e.message}`), { status: 502 }); }
+  }
+  throw err;
 }
 let ADMIN = INSTRUMENT === "cbtc" ? CBTC_ADMIN : null;
 async function admin() {
@@ -165,6 +175,8 @@ async function allocate(lender, amount, ref) {
 async function fund(to, amount) {
   USER_ID ??= tokenSubject(await token());
   const from = `${USER_ID}::${P.REGISTRY.split("::")[1]}`;
+  const treasury = (await holdings(from)).reduce((n, h) => n + h.amount, 0);
+  need(treasury - Number(amount) >= FUND_FLOOR, "the treasury is at its floor: top-ups are paused");
   const a = await admin(), now = iso(), later = iso(24 * 3600e3);
   const args = {
     expectedAdmin: a,
@@ -177,7 +189,12 @@ async function fund(to, amount) {
     { ...args, extraArgs: { context: f.choiceContext.choiceContextData, meta: { values: {} } } }, disclosedOf(f.choiceContext));
   const instr = createdOf(tx, (t) => t.includes("TransferInstruction"));
   if (instr) { // two-step transfer: the receiver accepts
-    const c = await registry(`/registry/transfer-instruction/v1/${encodeURIComponent(instr)}/choice-contexts/accept`);
+    // the token registry indexes the new instruction a few seconds after the ledger: retry its 404 briefly
+    let c;
+    for (let i = 0; ; i++) {
+      try { c = await registry(`/registry/transfer-instruction/v1/${encodeURIComponent(instr)}/choice-contexts/accept`); break; }
+      catch (e) { if (i >= 9 || !/ 404/.test(e.message)) throw e; await new Promise((r) => setTimeout(r, 1500)); }
+    }
     tx = await exercise(to, T.transferInstr, instr, "TransferInstruction_Accept", { extraArgs: { context: c.choiceContextData, meta: { values: {} } } }, disclosedOf(c));
   }
   return tx;
@@ -233,16 +250,22 @@ const ACTIONS = {
 // ---- auth: one password per organisation, a signed session cookie naming it, nothing stored server side
 const ACCOUNTS = Object.fromEntries(ORGS.filter((o) => env[`PASSWORD_${o.key}`]).map((o) => [o.key, env[`PASSWORD_${o.key}`]]));
 const SIGN_IN = (env.SESSION_SECRET ?? "").length >= 32 && Object.keys(ACCOUNTS).length > 0;
+// One access code for the jury: signs in as any organisation and acts in its role, except switching the
+// registry's automation on or off, which stays with the registry's own members.
+const JUDGE_CODE = (env.JUDGE_CODE ?? "").length >= 8 ? env.JUDGE_CODE : null;
+const MEMBERS_ONLY = new Set(["grant", "revoke"]);
+const FUND_FLOOR = Number(env.FUND_FLOOR ?? 100);   // the treasury never goes below this through top-ups
 const SESSION_MS = 8 * 3600e3;
 const sign = (v) => createHmac("sha256", env.SESSION_SECRET).update(v).digest("base64url");
 const same = (a, b) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 // cookie: expiry.org.mode.id.mac, mode "member" (signed in) or "guest" (read-only, no password)
 function session(req) {
   if (!SIGN_IN) return null;
-  const m = /(?:^|;\s*)pg_session=(\d+)\.([A-Z_]+)\.(member|guest)\.([\w-]+)\.([\w-]+)/.exec(req.headers.cookie ?? "");
+  const m = /(?:^|;\s*)pg_session=(\d+)\.([A-Z_]+)\.(member|guest|judge)\.([\w-]+)\.([\w-]+)/.exec(req.headers.cookie ?? "");
   if (!m || !same(m[5], sign(`${m[1]}.${m[2]}.${m[3]}.${m[4]}`)) || Number(m[1]) < Date.now() || !P[m[2]]) return null;
   if (m[3] === "member" && !ACCOUNTS[m[2]]) return null;
-  return { org: m[2], guest: m[3] === "guest", id: m[4] };
+  if (m[3] === "judge" && !JUDGE_CODE) return null;
+  return { org: m[2], mode: m[3], guest: m[3] === "guest", id: m[4] };
 }
 const newSession = (org, mode, ms) => { const v = `${Date.now() + ms}.${org}.${mode}.${randomBytes(12).toString("base64url")}`; return cookie(`${v}.${sign(v)}`, ms / 1000); };
 const cookie = (v, maxAge) => `pg_session=${v}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
@@ -314,7 +337,7 @@ createServer(async (req, res) => {
     }
     if (url.pathname === "/visibility") return json(res, 200, await visibility());
 
-    if (url.pathname === "/auth/me") { const s = session(req); return json(res, 200, { org: s?.org ?? null, guest: Boolean(s?.guest) }); }
+    if (url.pathname === "/auth/me") { const s = session(req); return json(res, 200, { org: s?.org ?? null, guest: Boolean(s?.guest), mode: s?.mode ?? null }); }
     if (url.pathname.startsWith("/me/")) {
       const s = session(req);
       if (!s) return json(res, 401, { error: "sign in first" });
@@ -337,11 +360,14 @@ createServer(async (req, res) => {
         if (blocked(key, 10)) return json(res, 429, { error: "too many failed attempts, wait 15 minutes" });
         const { org, password } = await readJson(req);
         const digest = (v) => createHash("sha256").update(String(v ?? "")).digest("base64url");
-        if (!Object.hasOwn(ACCOUNTS, org) || !same(digest(password), digest(ACCOUNTS[org]))) {
+        const member = Object.hasOwn(ACCOUNTS, org) && same(digest(password), digest(ACCOUNTS[org]));
+        const judge = !member && JUDGE_CODE && Object.hasOwn(P, org) && ORGS.some((o) => o.key === org) && same(digest(password), digest(JUDGE_CODE));
+        if (!member && !judge) {
           limited(key, 10, 15 * 60e3);
-          return json(res, 401, { error: "wrong organisation or password" });
+          return json(res, 401, { error: "wrong organisation, password or access code" });
         }
-        return json(res, 200, { org, guest: false }, { "set-cookie": newSession(org, "member", SESSION_MS) });
+        const mode = member ? "member" : "judge";
+        return json(res, 200, { org, guest: false, mode }, { "set-cookie": newSession(org, mode, SESSION_MS) });
       }
       // Read-only look at one organisation's workspace, without an account: what a visitor or a judge needs.
       if (url.pathname === "/auth/guest") {
@@ -358,6 +384,8 @@ createServer(async (req, res) => {
       if (!Object.hasOwn(ACTIONS, name)) return json(res, 404, { error: "unknown action" });
       if (s.guest) return json(res, 403, { error: "read-only access: sign in to act" });
       if (!ROLE[name].includes(s.org)) return json(res, 403, { error: "not an action of your organisation" });
+      if (s.mode === "judge" && MEMBERS_ONLY.has(name)) return json(res, 403, { error: "reserved to the registry's members: the automation stays on for everyone" });
+      if (limited(`actip:${clientIp(req)}`, 60, 60e3)) return json(res, 429, { error: "slow down: too many actions from this address" });
       if (limited(`act:${s.id}`, 30, 60e3)) return json(res, 429, { error: "slow down: 30 actions a minute" });
       const body = await readJson(req);
       const tx = await serial(() => ACTIONS[name](body, s.org));

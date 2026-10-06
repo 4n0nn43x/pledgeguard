@@ -201,7 +201,7 @@
       <div class="orgs" id="orgs" style="margin-top:12px" role="radiogroup" aria-label="Organisation"></div>
       <div class="step-label" id="step2"><span class="num">2</span><span id="step2-text">Then sign in, or explore without an account</span></div>
       <form class="card f" id="signin-form" data-active="false" style="max-width:420px;margin-top:12px;padding:16px">
-        <label>Password<input class="f" id="pw" type="password" autocomplete="current-password" required></label>
+        <label>Password, or the jury access code<input class="f" id="pw" type="password" autocomplete="current-password" required></label>
         <div class="row"><button class="a go" type="submit">Sign in</button>
           <button class="a" type="button" id="guest">Explore without an account</button><span class="hint" id="signin-err"></span></div>
         <div class="hint">No account? Explore opens the chosen organisation's workspace read-only, exactly as the ledger shows it to that organisation.</div>
@@ -275,7 +275,7 @@
 
 <script>
 const SCHEMA = "receivables-pool-v1";
-let cfg = { orgs: [] }, org = null, guest = false, data = { contracts: [] }, balance = null, picked = null;
+let cfg = { orgs: [] }, org = null, guest = false, mode = null, data = { contracts: [] }, balance = null, picked = null;
 
 const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const labelOf = (party) => cfg.orgs.find((o) => o.party === party)?.label ?? String(party).split("::")[0];
@@ -419,7 +419,8 @@ function paintDeleg() {
     <div class="card-body"><p class="small body-muted" style="margin:0">${d.length
       ? "The registry automation opens one index per fingerprint and checks every draw. Revoking it stops all draws until a new delegation is granted."
       : "No delegation: every draw waits. On the decentralized registry, granting is a 2 of 3 vote."}</p>
-    <div class="row" style="margin-top:12px">${d.length ? d.map((x) => btn("revoke", x.cid, "Revoke delegation", "warn")).join("") : btn("grant", "", "Grant delegation", "go")}</div></div>`;
+    <div class="row" style="margin-top:12px">${mode === "judge" ? `<span class="hint">Switching the automation is reserved to the registry's members.</span>`
+      : d.length ? d.map((x) => btn("revoke", x.cid, "Revoke delegation", "warn")).join("") : btn("grant", "", "Grant delegation", "go")}</div></div>`;
   if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
 }
 
@@ -479,7 +480,7 @@ function render() {
   document.getElementById("nav-workspace").textContent = o ? "Workspace" : "Sign in";
   document.getElementById("auth").innerHTML = !o ? ""
     : guest ? `<span class="tag hold">read-only</span> <span class="small body-muted">${esc(o.label)}</span> <button class="a" id="signout">Leave</button>`
-    : `<span class="small body-muted">${esc(o.label)}</span> <button class="a" id="signout">Sign out</button>`;
+    : `${mode === "judge" ? '<span class="tag hold">jury access</span> ' : ""}<span class="small body-muted">${esc(o.label)}</span> <button class="a" id="signout">Sign out</button>`;
   if (o) {
     document.getElementById("org-label").textContent = o.label;
     document.getElementById("org-blurb").textContent = o.blurb;
@@ -547,7 +548,7 @@ document.addEventListener("click", async (e) => {
   if (b.id === "signout" || b.id === "to-signin") {
     picked = org; // back on the sign-in screen with the same organisation selected
     await fetch("/auth/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-    org = null; guest = false; return render();
+    org = null; guest = false; mode = null; return render();
   }
   if (b.id === "guest") {
     const err = document.getElementById("signin-err");
@@ -584,7 +585,7 @@ document.addEventListener("submit", async (e) => {
     const j = await r.json();
     if (!r.ok) { err.textContent = j.error; return; }
     document.getElementById("pw").value = ""; err.textContent = "";
-    org = j.org; guest = false;
+    org = j.org; guest = false; mode = j.mode;
     return render();
   }
   const v = Object.fromEntries(new FormData(f));
@@ -717,7 +718,7 @@ document.querySelectorAll("a.nav").forEach((a) => a.addEventListener("click", (e
 (async () => {
   cfg = await getJson("/config");
   document.getElementById("net").textContent = cfg.network;
-  ({ org, guest } = await getJson("/auth/me"));
+  ({ org, guest, mode } = await getJson("/auth/me"));
   render();
   go(["visibility", "governance"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "workspace");
   setInterval(refresh, 5000);

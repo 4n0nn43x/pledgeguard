@@ -39,7 +39,11 @@
 
   .head h1 { font-size: 26px; margin: 0; }
   .head p { margin: 6px 0 0; max-width: 72ch; }
-  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start; }
+  /* the form is a narrow column, the tables get the rest; one column on narrow screens */
+  .cols { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .cols.single { grid-template-columns: minmax(0, 1fr); }
+  @media (max-width: 1100px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .card.flush { overflow-x: auto; }   /* a wide table scrolls inside its card instead of hiding its buttons */
   .card-head .tag { font-variant-numeric: tabular-nums; }
   .empty { padding: 22px 16px; color: var(--dim); font-size: 13px; }
   table.data td .hash { color: var(--accent); }
@@ -278,7 +282,8 @@ const num = (v) => Number(v).toLocaleString("en", { maximumFractionDigits: 4 });
 const pct = (v) => `${(Number(v) * 100).toLocaleString("en", { maximumFractionDigits: 3 })}%`;
 const day = (v) => esc(String(v ?? "").slice(0, 10));
 const when = (v) => esc(String(v ?? "").replace("T", " ").slice(0, 16));
-const of = (t) => data.contracts.filter((c) => (t instanceof RegExp ? t.test(c.t) : c.t === t));
+// newest first: the ledger returns active contracts in creation order
+const of = (t) => data.contracts.filter((c) => (t instanceof RegExp ? t.test(c.t) : c.t === t)).reverse();
 const orgOf = (key) => cfg.orgs.find((o) => o.key === key);
 const MONEY = ["ORIGINATOR", "LENDER_A", "LENDER_B"];
 
@@ -459,7 +464,7 @@ function workspace() {
       <div><h1>${esc(o.label)}</h1><p class="body-muted small">${esc(o.blurb)}</p></div>
       ${MONEY.includes(org) ? `<div style="text-align:right"><div class="eyebrow">Balance</div><div class="bal" id="balance">…</div><div style="margin-top:8px">${topUp}</div></div>` : ""}
     </div>
-    <div class="cols" style="margin-top:18px">${side ? `<div class="enter" style="--i:1">${side}</div>` : ""}<div id="tables" style="display:grid;gap:16px"></div></div>`;
+    <div class="cols${side ? "" : " single"}" style="margin-top:18px">${side ? `<div class="enter" style="--i:1">${side}</div>` : ""}<div id="tables" style="display:grid;gap:16px"></div></div>`;
   paint();
 }
 

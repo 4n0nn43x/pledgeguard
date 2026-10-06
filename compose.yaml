@@ -35,7 +35,7 @@ services:
     env_file: .devnet.env
     environment:
       LEDGER_URL: https://ledger-api-json.participant.hackcanton-01.devnet.naas.noders.services
-      TOKEN_REGISTRY_URL: https://scan.sv-1.dev.global.canton.network.digitalasset.com
+      TOKEN_REGISTRY_URL: https://scan.sv-1.dev.global.canton.network.digitalasset.com,https://scan.sv-2.dev.global.canton.network.digitalasset.com
       STATE_FILE: /data/registry-state.json
     volumes:
       - registry-state:/data

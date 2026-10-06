@@ -30,7 +30,9 @@ const OPS = env("OPS_PARTY", process.env.OPS);
 const AUDITOR = env("AUDITOR_PARTY", process.env.AUDITOR);
 const STATE_FILE = env("STATE_FILE", "./registry-state.json");
 const POLL_MS = Number(env("POLL_MS", "1000"));
-const REGISTRY_URL = (process.env.TOKEN_REGISTRY_URL ?? "").replace(/\/$/, "");
+// comma separated: a lagging scan answers 404 for a contract the others already see, so the next one is tried
+const REGISTRY_URLS = (process.env.TOKEN_REGISTRY_URL ?? "").split(",").map((u) => u.trim().replace(/\/$/, "")).filter(Boolean);
+const REGISTRY_URL = REGISTRY_URLS[0] ?? "";
 // Several versions of the app package can be vetted at once; pin the one this build expects,
 // otherwise the ledger resolves #pledgeguard to an older version and rejects new choice fields.
 const PKG_PREF = (process.env.PACKAGE_PREFERENCE ?? "").split(",").filter(Boolean);
@@ -67,10 +69,15 @@ const eventFormat = {
 // the transfer. Returns the empty context when no registry is configured (mock allocations).
 async function executeTransferContext(allocationCid) {
   if (!REGISTRY_URL) return { context: { values: {} }, disclosed: [] };
-  const res = await fetch(`${REGISTRY_URL}/registry/allocations/v1/${encodeURIComponent(allocationCid)}/choice-contexts/execute-transfer`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: "{}",
-  });
-  if (!res.ok) throw new Error(`registry context ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  let res, text = "";
+  for (const base of REGISTRY_URLS) {
+    res = await fetch(`${base}/registry/allocations/v1/${encodeURIComponent(allocationCid)}/choice-contexts/execute-transfer`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: "{}", signal: AbortSignal.timeout(15000),
+    }).catch((e) => ({ ok: false, status: 0, text: async () => e.message }));
+    if (res.ok) break;
+    text = await res.text();
+  }
+  if (!res.ok) throw new Error(`registry context ${res.status}: ${text.slice(0, 300)}`);
   const c = await res.json();
   return {
     context: c.choiceContextData ?? { values: {} },

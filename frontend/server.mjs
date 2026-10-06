@@ -45,6 +45,7 @@ const ORGS = [
   { key: "AUDITOR", label: "Auditor", blurb: "Sees the double pledges that were stopped, nothing else" },
 ].filter((o) => env[o.key]).map((o) => ({ ...o, party: env[o.key] }));
 const P = Object.fromEntries(ORGS.map((o) => [o.key, o.party]));
+P.OPS = env.OPS;   // the registry's automation party: not an organisation, no sign-in, but the delegation names it
 const LENDERS = ["LENDER_A", "LENDER_B"];
 
 // ---- instrument (Canton token standard registry)

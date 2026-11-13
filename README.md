@@ -132,7 +132,7 @@ If your host already uses port 5432, start the sandbox with `DB_PORT=5433 ./hack
 
 ### The platform
 
-Live on Canton DevNet at **https://pledgeguard.fyra.fun/app**. Each organisation signs in with its own
+Live on Canton DevNet at **https://pledgeguard.space/app**. Each organisation signs in with its own
 account and sees only its own workspace, filled from its own `/v2/state/active-contracts`:
 
 | Organisation | Its workspace |
